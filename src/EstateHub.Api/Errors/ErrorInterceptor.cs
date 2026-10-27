@@ -51,8 +51,8 @@ public sealed class ErrorInterceptor : Interceptor
     {
         switch (ex)
         {
-            case ArgumentException:
-                return new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
+            case ArgumentException argument:
+                return new RpcException(new Status(StatusCode.InvalidArgument, UserMessage(argument)));
             case KeyNotFoundException:
                 return new RpcException(new Status(StatusCode.NotFound, ex.Message));
             case OperationCanceledException when context.CancellationToken.IsCancellationRequested:
@@ -62,5 +62,20 @@ public sealed class ErrorInterceptor : Interceptor
                 _logger.LogError(ex, "Unhandled error in {Method} (ref {Reference})", context.Method, reference);
                 return new RpcException(new Status(StatusCode.Internal, $"Something went wrong (ref {reference})."));
         }
+    }
+
+    /// <summary>
+    /// ArgumentException.Message appends " (Parameter 'name')" when a parameter name is given: a
+    /// developer detail users shouldn't see. The suffix is built the same way (same culture) and cut off.
+    /// </summary>
+    private static string UserMessage(ArgumentException ex)
+    {
+        if (string.IsNullOrEmpty(ex.ParamName))
+            return ex.Message;
+
+        var suffix = new ArgumentException(string.Empty, ex.ParamName).Message;
+        return ex.Message.EndsWith(suffix, StringComparison.Ordinal)
+            ? ex.Message[..^suffix.Length].TrimEnd()
+            : ex.Message;
     }
 }

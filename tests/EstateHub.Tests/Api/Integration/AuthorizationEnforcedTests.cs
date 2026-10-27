@@ -149,6 +149,6 @@ public class AuthorizationEnforcedTests : IClassFixture<EstateHubApiFactory>
         var error = await GrpcStatus.ErrorOf(() => Estate().CreateBlockAsync(new CreateBlockRequest { Name = "" }, EstateHubApiFactory.Bearer(token)).ResponseAsync);
 
         error!.StatusCode.Should().Be(StatusCode.InvalidArgument);
-        error.Status.Detail.Should().Be("Name is required. (Parameter 'name')");
+        error.Status.Detail.Should().Be("Name is required."); // no " (Parameter 'name')" developer suffix
     }
 }
