@@ -1,0 +1,36 @@
+# Weekly grouped update PRs + immediate security PRs (SECURITY.md layer 10). Ceasor reviews and merges.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Africa/Johannesburg
+    groups:
+      nuget:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Africa/Johannesburg
+
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Africa/Johannesburg
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Africa/Johannesburg
+    groups:
+      actions:
+        patterns: ["*"]

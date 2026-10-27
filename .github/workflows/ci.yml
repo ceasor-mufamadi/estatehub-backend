@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to the same PR/branch cancels the run it supersedes.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# TODO (SECURITY.md layer 10): pin every `uses:` below to a full commit SHA (e.g. with the free
+# `pinact` tool) once the repo is on GitHub; Dependabot then keeps the SHAs current.
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  COVERAGE_THRESHOLD: 70
+
+jobs:
+  # ── PR only: every PR must bump the service version ────────────────────────
+  version-bump:
+    name: Version bump
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Service version bumped
+        run: bash .github/scripts/check-version-bump.sh version "origin/${{ github.base_ref }}"
+
+      - name: Protos package version bumped when .proto files are added or modified
+        run: bash .github/scripts/check-version-bump.sh EstateHubProtos/version "origin/${{ github.base_ref }}" '\.proto$'
+
+  # ── Always: build, test; PR only: diff coverage gate ──────────────────────
+  build-and-test:
+    name: Build, test & coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # coverage summary
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # diff-cover needs the merge base with the target branch
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Test with coverage
+        run: |
+          dotnet test tests/EstateHub.Tests/EstateHub.Tests.csproj \
+            -c Release \
+            --no-build \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage \
+            --logger "trx;LogFileName=test-results.trx"
+
+      - name: Stage coverage report
+        run: |
+          report=$(find coverage -name coverage.cobertura.xml | head -n 1)
+          if [ -z "$report" ]; then echo "::error::No coverage report produced."; exit 1; fi
+          cp "$report" coverage.cobertura.xml
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            coverage/**/*.trx
+            coverage.cobertura.xml
+
+      - name: Set up Python (for diff-cover)
+        if: github.event_name == 'pull_request'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Enforce ${{ env.COVERAGE_THRESHOLD }}% coverage on changed code
+        if: github.event_name == 'pull_request'
+        run: |
+          pip install --quiet diff-cover
+          diff-cover coverage.cobertura.xml \
+            --compare-branch="origin/${{ github.base_ref }}" \
+            --src-roots src \
+            --exclude "*/Migrations/*" \
+            --fail-under=${{ env.COVERAGE_THRESHOLD }} \
+            --markdown-report diff-coverage.md
+          { echo "## Diff coverage (threshold ${{ env.COVERAGE_THRESHOLD }}%)"; echo; cat diff-coverage.md; } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── Security gates (SECURITY.md layers 7, 10, 14) ──────────────────────────
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:v8.21.2 detect --redact --config .gitleaks.toml
+
+  sast:
+    name: Static analysis (Semgrep CE)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: semgrep
+        run: semgrep scan --config p/csharp --config p/secrets --config p/docker --error --metrics=off
+
+  dependencies:
+    name: Vulnerable packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Fail on HIGH/CRITICAL NuGet vulnerabilities
+        run: |
+          dotnet restore
+          dotnet list package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -Eq '\b(High|Critical)\b' vulnerable.txt; then
+            echo "::error::High/critical vulnerable packages found (see above)."; exit 1
+          fi
+
+  image:
+    name: Docker image scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t estatehub-backend:ci .
+      - name: Trivy (fail on HIGH/CRITICAL with a fix available)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: estatehub-backend:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: .trivyignore

@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+option csharp_namespace = "EstateHub.Api";
+package estatehub.audit_log.v1;
+
+import "google/protobuf/timestamp.proto";
+import "Protos/streaming.proto";
+
+// Audit entries are written by the server itself after every state change (and every auth
+// event). There is deliberately no Create RPC: clients must not be able to forge history.
+// Every call is scoped to the caller's active estate.
+
+message AuditLogEntry {
+  string id = 1;
+  string entity_type = 2;
+  string entity_id = 3;
+  string action = 4;
+  string performed_by = 5;
+  google.protobuf.Timestamp performed_at = 6;
+  optional string details = 7;
+  optional string ip_address = 8;
+}
+
+message GetAuditLogRequest {
+  string id = 1;
+}
+
+message ListAuditLogsRequest {
+  // Both optional: empty lists the whole estate's trail, newest first.
+  string entity_type = 1;
+  string entity_id = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ListAuditLogsResponse {
+  repeated AuditLogEntry items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message SubscribeAuditLogsRequest {
+  // Optional filter; empty streams every new entry in the estate.
+  string entity_type = 1;
+}
+
+message AuditLogStreamEvent {
+  oneof event {
+    AuditLogEntry entry = 1;
+    estatehub.streaming.v1.StreamHeartbeat heartbeat = 2;
+  }
+}
+
+service AuditLogService {
+  rpc GetAuditLog(GetAuditLogRequest) returns (AuditLogEntry);
+  rpc ListAuditLogs(ListAuditLogsRequest) returns (ListAuditLogsResponse);
+  rpc SubscribeAuditLogs(SubscribeAuditLogsRequest) returns (stream AuditLogStreamEvent);
+}

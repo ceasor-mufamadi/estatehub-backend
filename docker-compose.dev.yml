@@ -1,0 +1,88 @@
+# Local development. Everything binds to 127.0.0.1 only.
+#
+#   cp .env.example .env                                         # once
+#   docker compose -f docker-compose.dev.yml up -d               # Postgres + Mailpit (leave running)
+#   docker compose -f docker-compose.dev.yml run --rm sdk dotnet test    # build + test in the SDK container
+#   docker compose -f docker-compose.dev.yml --profile app up api        # run the API (gRPC :5269, gRPC-Web :5268)
+#
+# See README.md "Development with Docker" for every command.
+
+name: estatehub-dev
+
+services:
+  postgres:
+    image: postgres:17.6
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?copy .env.example to .env}
+      ESTATEHUB_MIGRATOR_PASSWORD: ${ESTATEHUB_MIGRATOR_PASSWORD}
+      ESTATEHUB_APP_PASSWORD: ${ESTATEHUB_APP_PASSWORD}
+      ESTATEHUB_DATABASES: estatehub_dev estatehub_test
+      TZ: Africa/Johannesburg
+      PGTZ: Africa/Johannesburg
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Catches every email the app sends (OTPs, invitations, statements). Web UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.21.0
+    environment:
+      TZ: Africa/Johannesburg
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+
+  # .NET SDK for building, testing and EF migrations (no SDK needed on your Mac).
+  # One-off commands: docker compose -f docker-compose.dev.yml run --rm sdk <command>
+  sdk:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    profiles: ["tools"]
+    working_dir: /src
+    volumes:
+      - .:/src
+      - nuget_cache:/root/.nuget/packages
+    environment:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+      TZ: Africa/Johannesburg
+      ConnectionStrings__Migrator: Host=postgres;Database=estatehub_dev;Username=estatehub_migrator;Password=${ESTATEHUB_MIGRATOR_PASSWORD};Timezone=Africa/Johannesburg
+      ConnectionStrings__Postgres: Host=postgres;Database=estatehub_dev;Username=estatehub_app;Password=${ESTATEHUB_APP_PASSWORD};Timezone=Africa/Johannesburg
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # The API, built and run from source with `dotnet watch` (restarts on code changes).
+  api:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    profiles: ["app"]
+    working_dir: /src
+    command: ["dotnet", "watch", "--project", "src/EstateHub.Api", "run", "--no-launch-profile"]
+    volumes:
+      - .:/src
+      - nuget_cache:/root/.nuget/packages
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_USE_POLLING_FILE_WATCHER: "1"
+      TZ: Africa/Johannesburg
+      Kestrel__Endpoints__Http__Url: http://0.0.0.0:5268
+      Kestrel__Endpoints__Grpc__Url: http://0.0.0.0:5269
+      ConnectionStrings__Postgres: Host=postgres;Database=estatehub_dev;Username=estatehub_app;Password=${ESTATEHUB_APP_PASSWORD};Timezone=Africa/Johannesburg
+    ports:
+      - "127.0.0.1:5268:5268"
+      - "127.0.0.1:5269:5269"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  nuget_cache:

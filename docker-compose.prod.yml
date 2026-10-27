@@ -1,0 +1,64 @@
+# Production. Ceasor deploys this; nothing here is run automatically.
+#
+#   cp .env.prod.example .env.prod   # fill in real values, then: chmod 600 .env.prod
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#
+# Postgres is NOT in this file: it runs separately (own server/container) and is reached through
+# ConnectionStrings__Postgres. Prepare it with docker/postgres/init/01-roles-and-databases.sh.
+#
+# Hardening (SECURITY.md layers 10–11):
+# - NO `ports:` anywhere. Docker-published ports bypass UFW. cloudflared/Caddy reach the API over
+#   the existing edge Docker network instead.
+# - read-only root filesystem (+ small tmpfs), all Linux capabilities dropped, no-new-privileges,
+#   CPU/memory limits, non-root user (chiseled image default), never privileged, no Docker socket.
+# - log rotation so logs can't fill the disk.
+
+name: estatehub
+
+x-hardened: &hardened
+  image: ${ESTATEHUB_IMAGE:?set ESTATEHUB_IMAGE, e.g. ghcr.io/<owner>/estatehub-backend:0.1.0}
+  restart: unless-stopped
+  env_file: .env.prod
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  api:
+    <<: *hardened
+    environment:
+      RUN_MODE: api
+      ASPNETCORE_ENVIRONMENT: Docker
+    networks: [edge]
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 768M
+
+  jobs:
+    <<: *hardened
+    environment:
+      RUN_MODE: jobs
+      ASPNETCORE_ENVIRONMENT: Docker
+    networks: [edge]
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
+
+networks:
+  # The network cloudflared/Caddy already use on the server (see `docker network ls`).
+  edge:
+    external: true
+    name: ${EDGE_NETWORK:-web}

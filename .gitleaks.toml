@@ -1,0 +1,12 @@
+# gitleaks config (SECURITY.md layer 7). Extends the default rules.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Local-development-only placeholders, documented as such"
+paths = [
+  '''\.env\.example$''',
+  '''\.env\.prod\.example$''',
+  '''appsettings\.Development\.example\.json$''',
+  '''src/EstateHub\.Infrastructure/Data/DesignTimeDbContextFactory\.cs$''',
+]

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "applicationUrl": "http://localhost:5268;http://localhost:5269",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "jobs": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "applicationUrl": "http://localhost:5270",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "RUN_MODE": "jobs"
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+option csharp_namespace = "EstateHub.Api";
+package estatehub.streaming.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Shared building blocks for server-streaming RPCs.
+//
+// Convention: every streamed response message is a `oneof` of the real payload and a
+// StreamHeartbeat, e.g.
+//
+//   message AuditLogStreamEvent {
+//     oneof event {
+//       AuditLogEntry entry = 1;
+//       estatehub.streaming.v1.StreamHeartbeat heartbeat = 2;
+//     }
+//   }
+//
+// The server sends a heartbeat with reason "connected" as soon as the stream opens (so the
+// client knows it is live) and "keepalive" while idle (so browsers/proxies don't drop it).
+// Clients just ignore heartbeats they don't care about.
+
+message StreamHeartbeat {
+  google.protobuf.Timestamp server_time = 1;
+  string reason = 2;
+}

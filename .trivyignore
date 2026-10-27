@@ -1,0 +1,1 @@
+# Trivy false positives / accepted risks. One CVE per line, each with a comment: why, who, until when.

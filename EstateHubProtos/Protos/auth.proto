@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+option csharp_namespace = "EstateHub.Api";
+package estatehub.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Sprint 1 surface: token signing keys + a development-only sign-in. The real flows
+// (OTP, password + MFA, refresh, sessions, invitations, estate switching) land in Sprint 2;
+// see PHASE1.md §2a.
+
+message DevSignInRequest {
+  // Free-form user id for local testing (there is no user table until Sprint 2).
+  string user_id = 1;
+  // Estate to scope the token to. Empty = platform-level token (only useful for super_admin).
+  string estate_id = 2;
+  // One of the role keys in RolePermissions (e.g. "manager", "owner", "super_admin").
+  string role = 3;
+  // Pretend the user just completed MFA (sets amr=mfa and auth_time=now).
+  bool mfa = 4;
+}
+
+message TokenResponse {
+  string access_token = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  repeated string permissions = 3;
+  string role = 4;
+  string estate_id = 5;
+}
+
+message GetJwksRequest {}
+
+message GetJwksResponse {
+  // JSON Web Key Set with the public keys tokens are signed with (RFC 7517).
+  string jwks_json = 1;
+}
+
+service AuthService {
+  // Disabled (UNIMPLEMENTED) outside the Development and Testing environments.
+  rpc DevSignIn(DevSignInRequest) returns (TokenResponse);
+  rpc GetJwks(GetJwksRequest) returns (GetJwksResponse);
+}

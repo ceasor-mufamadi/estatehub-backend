@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+option csharp_namespace = "EstateHub.Api";
+package estatehub.platform.v1;
+
+// Super admin (platform) operations. These are not scoped to one estate.
+
+message EstateEntry {
+  string id = 1;
+  string name = 2;
+  string scheme_type = 3;
+  repeated string enabled_features = 4;
+}
+
+message CreateEstateRequest {
+  string name = 1;
+  // "sectional_title" (Phase 1), later "hoa" or "rental".
+  string scheme_type = 2;
+}
+
+message ListEstatesRequest {}
+
+message ListEstatesResponse {
+  repeated EstateEntry items = 1;
+}
+
+message SetEstateFeatureRequest {
+  string estate_id = 1;
+  string feature_key = 2;
+  bool enabled = 3;
+}
+
+service PlatformService {
+  rpc CreateEstate(CreateEstateRequest) returns (EstateEntry);
+  rpc ListEstates(ListEstatesRequest) returns (ListEstatesResponse);
+  // Needs MFA within the last 15 minutes (AUTH-12).
+  rpc SetEstateFeature(SetEstateFeatureRequest) returns (EstateEntry);
+}

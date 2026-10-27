@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+option csharp_namespace = "EstateHub.Api";
+package estatehub.estate.v1;
+
+// Structure inside the caller's active estate. Sprint 1 only has blocks; units, PQ and
+// people arrive in Sprint 3. Every call is scoped to the token's estate.
+
+message BlockEntry {
+  string id = 1;
+  string name = 2;
+}
+
+message CreateBlockRequest {
+  string name = 1;
+}
+
+message ListBlocksRequest {}
+
+message ListBlocksResponse {
+  repeated BlockEntry items = 1;
+}
+
+service EstateService {
+  rpc CreateBlock(CreateBlockRequest) returns (BlockEntry);
+  rpc ListBlocks(ListBlocksRequest) returns (ListBlocksResponse);
+}

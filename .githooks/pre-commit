@@ -1,0 +1,16 @@
+#!/bin/sh
+# EstateHub pre-commit (enable once: git config core.hooksPath .githooks)
+# 1. Secret scan of staged changes (gitleaks).  2. Test suite in the SDK container.
+# Both run through Docker, so Docker Desktop must be open. Emergency bypass: git commit --no-verify
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-commit: scanning staged changes for secrets (gitleaks)..."
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --config .gitleaks.toml
+else
+  docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:v8.21.2 protect --staged --redact --config .gitleaks.toml
+fi
+
+echo "pre-commit: running tests (docker compose sdk)..."
+docker compose -f docker-compose.dev.yml run --rm sdk dotnet test tests/EstateHub.Tests/EstateHub.Tests.csproj --nologo

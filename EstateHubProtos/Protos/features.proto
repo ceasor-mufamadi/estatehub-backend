@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option csharp_namespace = "EstateHub.Api";
+package estatehub.features.v1;
+
+message GetMyContextRequest {}
+
+message GetMyContextResponse {
+  string user_id = 1;
+  string estate_id = 2;
+  string estate_name = 3;
+  string role = 4;
+  repeated string permissions = 5;
+  // Effective feature keys for the active estate (defaults + overrides, dependencies applied).
+  repeated string enabled_features = 6;
+}
+
+service FeaturesService {
+  // What the web app needs to render: who am I, which estate, what may I do, what is switched on.
+  rpc GetMyContext(GetMyContextRequest) returns (GetMyContextResponse);
+}
