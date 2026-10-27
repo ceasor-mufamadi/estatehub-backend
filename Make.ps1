@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  PowerShell Makefile for the EstateHub gRPC backend (same shape as chieta-etqa-backend's).
+  PowerShell Makefile for the EstateHub gRPC backend.
 
 .DESCRIPTION
   Every .NET command runs inside the SDK container from docker-compose.dev.yml, so no local

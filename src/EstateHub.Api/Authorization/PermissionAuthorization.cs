@@ -11,7 +11,7 @@ public sealed class PermissionRequirement(string permission) : IAuthorizationReq
 /// <summary>
 /// Builds a policy for any "perm:&lt;name&gt;" on demand, so permissions never need registering in
 /// Program.cs. Owns the fallback policy too: an RPC with no attribute at all still requires a
-/// signed-in caller (deny by default). Unlike ETQA there is no Enforce switch (AUTH-17).
+/// signed-in caller (deny by default). There is no Enforce switch (AUTH-17).
 /// </summary>
 public sealed class PermissionPolicyProvider : IAuthorizationPolicyProvider
 {

@@ -2,7 +2,7 @@
 
 The backend for **EstateHub**, multi-tenant estate management for South African sectional title
 schemes (plan: `../PHASE1.md`, security: `../SECURITY.md`). Built with **.NET 10**, **gRPC +
-gRPC-Web**, **EF Core** and **PostgreSQL**, in the same layered structure as `chieta-etqa-backend`.
+gRPC-Web**, **EF Core** and **PostgreSQL**, in a layered structure.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ docker/postgres/init        Creates the estatehub_migrator + estatehub_app roles
 ```
 
 Same image, two roles: `RUN_MODE=api` (default) serves gRPC; `RUN_MODE=jobs` runs the cron jobs
-(framework from `chieta-disbursement-service`).
+(`ICronJob` framework in `Infrastructure/Cron`).
 
 ## Development with Docker (no local .NET SDK needed)
 

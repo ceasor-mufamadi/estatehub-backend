@@ -16,7 +16,7 @@ AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport
 // (Development) and environment variables, in that precedence order.
 var builder = WebApplication.CreateBuilder(args);
 
-// Same image, two roles (as chieta-disbursement-service): "api" (default) serves gRPC,
+// Same image, two roles: "api" (default) serves gRPC,
 // "jobs" runs the cron jobs. docker-compose.prod.yml starts one container of each.
 var runMode =
     Environment.GetEnvironmentVariable("RUN_MODE")

@@ -495,8 +495,6 @@ appsettings.Development.json
 # Internal team docs (lead only, never committed)
 docs/internal/
 
-# Downloaded proto code generators (EtqaServiceProtos/generate-ts.ps1)
-EtqaServiceProtos/.tools/
 
 # --- EstateHub ---
 # Local settings with real connection strings / keys: copy from the *.example.json files.

@@ -10,7 +10,7 @@ namespace EstateHub.Tests.Api;
 //   permission: [RequiresPermission(...)], [Authorize] or [AllowAnonymous]
 //   ownership:  [RequiresAccess(...)], [AccessScopedInAction("why")] or [NoOwnershipRequired("why")]
 //   feature:    [RequiresFeature("key")] or [AlwaysOn("why")]
-// A new RPC without them fails the build. Unlike ETQA there is no "pending" escape hatch.
+// A new RPC without them fails the build. There is no "pending" escape hatch.
 public class AuthorizationCoverageTests
 {
     private static readonly Type[] OwnershipAttributes =
