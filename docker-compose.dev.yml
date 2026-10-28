@@ -33,7 +33,7 @@ services:
 
   # Catches every email the app sends (OTPs, invitations, statements). Web UI: http://localhost:8025
   mailpit:
-    image: axllent/mailpit:v1.21.0
+    image: axllent/mailpit:v1.32.0
     environment:
       TZ: Africa/Johannesburg
     ports:
