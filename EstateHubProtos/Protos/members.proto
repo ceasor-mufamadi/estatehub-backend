@@ -18,6 +18,8 @@ message Member {
   google.protobuf.Timestamp since = 7;
   // The caller may change this member's role or remove them.
   bool can_manage = 8;
+  // Has an authenticator app (staff always, residents rarely).
+  bool mfa_enabled = 9;
 }
 
 message PendingInvitation {
@@ -48,7 +50,11 @@ message InviteRequest {
   string role = 4;
 }
 
-message InvitationIdRequest {
+message ResendInvitationRequest {
+  string invitation_id = 1;
+}
+
+message RevokeInvitationRequest {
   string invitation_id = 1;
 }
 
@@ -65,12 +71,20 @@ message RemoveMemberResponse {}
 
 message RevokeInvitationResponse {}
 
+message ResetMemberMfaRequest {
+  string membership_id = 1;
+}
+
+message ResetMemberMfaResponse {}
+
 service MembersService {
   rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
   rpc Invite(InviteRequest) returns (PendingInvitation);
   // A fresh link (the previous one stops working), valid 7 more days.
-  rpc ResendInvitation(InvitationIdRequest) returns (PendingInvitation);
-  rpc RevokeInvitation(InvitationIdRequest) returns (RevokeInvitationResponse);
+  rpc ResendInvitation(ResendInvitationRequest) returns (PendingInvitation);
+  rpc RevokeInvitation(RevokeInvitationRequest) returns (RevokeInvitationResponse);
   rpc ChangeRole(ChangeRoleRequest) returns (Member);
   rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
+  // Lost authenticator: they set up a new one at their next sign-in. Needs MFA within 15 minutes.
+  rpc ResetMemberMfa(ResetMemberMfaRequest) returns (ResetMemberMfaResponse);
 }

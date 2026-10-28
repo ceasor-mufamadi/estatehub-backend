@@ -20,4 +20,7 @@ public interface IAppLinks
 {
     /// <summary>The token goes in the URL fragment (#…), which browsers never send to servers or logs.</summary>
     string Invitation(string token);
+
+    /// <summary>The "This wasn't me" page for a new sign-in email (token in the fragment).</summary>
+    string SecureAccount(string token);
 }

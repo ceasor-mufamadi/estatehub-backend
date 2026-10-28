@@ -77,6 +77,16 @@ public sealed class RequiresRecentMfaAttribute : Attribute
 }
 
 /// <summary>
+/// The caller must have signed in within the last 15 minutes, by any method. For residents, who sign in
+/// with a code and have no authenticator to step up with (slice 3.4: changing contact details, own data).
+/// </summary>
+[AttributeUsage(AttributeTargets.Method | AttributeTargets.Class)]
+public sealed class RequiresRecentSignInAttribute : Attribute
+{
+    public static readonly TimeSpan MaxAge = Application.Services.AuthService.RecentMfaMaxAge;
+}
+
+/// <summary>
 /// The RPC may run without an active estate (login, keys, super admin). Without this attribute a
 /// token with no estate_id is refused with FAILED_PRECONDITION.
 /// </summary>

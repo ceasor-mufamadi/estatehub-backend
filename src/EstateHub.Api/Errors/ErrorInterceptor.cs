@@ -9,6 +9,7 @@ namespace EstateHub.Api.Errors;
 ///   ArgumentException      → INVALID_ARGUMENT (message is meant for the user)
 ///   AuthFailedException    → UNAUTHENTICATED (message is meant for the user, never says which part failed)
 ///   RateLimitedException   → RESOURCE_EXHAUSTED (message is meant for the user)
+///   HumanCheckRequiredException → FAILED_PRECONDITION + "estatehub-challenge: turnstile" trailer
 ///   ActionNotAllowedException → PERMISSION_DENIED (message is meant for the user)
 ///   KeyNotFoundException   → NOT_FOUND
 ///   RpcException           → passed through
@@ -57,6 +58,10 @@ public sealed class ErrorInterceptor : Interceptor
         {
             case AuthFailedException:
                 return new RpcException(new Status(StatusCode.Unauthenticated, ex.Message));
+            case HumanCheckRequiredException:
+                return new RpcException(
+                    new Status(StatusCode.FailedPrecondition, ex.Message),
+                    new Metadata { { Security.SignInResponses.ChallengeTrailer, "turnstile" } });
             case RateLimitedException:
                 return new RpcException(new Status(StatusCode.ResourceExhausted, ex.Message));
             case ActionNotAllowedException:

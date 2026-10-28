@@ -33,6 +33,17 @@ public class AuthSession : IHasTimestamps
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
 
+    /// <summary>
+    /// Support access (AUTH-13): a super admin looking at one estate read-only, until
+    /// <see cref="ImpersonationEndsAt"/> (30 minutes). The reason is recorded in the estate's audit log.
+    /// </summary>
+    public Guid? ImpersonationEstateId { get; set; }
+    public string? ImpersonationReason { get; set; }
+    public DateTime? ImpersonationEndsAt { get; set; }
+
+    /// <summary>Set for a guard's shift session on a paired tablet (AUTH-14); revoking the tablet ends it.</summary>
+    public Guid? GuardDeviceId { get; set; }
+
     public DateTime? RevokedAt { get; set; }
     public string? RevokedReason { get; set; }
 

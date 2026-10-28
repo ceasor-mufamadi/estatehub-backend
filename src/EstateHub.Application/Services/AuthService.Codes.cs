@@ -20,34 +20,8 @@ public partial class AuthService
     public const string InvitationInvalid = "This invitation link isn't valid any more. Ask whoever invited you for a new one.";
     public const string TooManyCodes = "Too many codes requested. Please wait an hour and try again.";
 
-    public async Task<OtpStep> RequestOtpAsync(string identifier, ClientInfo client, CancellationToken ct = default)
-    {
-        identifier = (identifier ?? string.Empty).Trim();
-        if (identifier.Length == 0)
-            throw new ArgumentException("Enter your email address or mobile number.");
-
-        var (channel, address) = ContactPoints.LooksLikeEmail(identifier)
-            ? (OtpChannel.Email, ContactPoints.Email(identifier))
-            : (OtpChannel.Sms, ContactPoints.SaMobile(identifier));
-
-        var user = channel == OtpChannel.Email
-            ? await _repo.FindUserByEmailAsync(address, ct)
-            : await _repo.FindUserByPhoneAsync(address, ct);
-        if (user is { Status: not UserStatus.Active })
-            user = null;
-
-        var (token, code, challenge) = await NewOtpChallengeAsync(OtpPurpose.SignIn, channel, address, user?.Id, null, client, ct);
-        await _repo.SaveChangesAsync(ct);
-
-        // AUTH-07: unknown addresses get the same answer, but nothing is sent.
-        if (user is not null)
-        {
-            await SendCodeAsync(channel, address, code, ct);
-            await AuditAsync(user.Id.ToString(), "CodeSent", user.Id.ToString(), client, $"channel={channel}", ct);
-        }
-
-        return new OtpStep(token, channel, ContactPoints.Mask(address), Utc(challenge.ExpiresAt));
-    }
+    public Task<OtpStep> RequestOtpAsync(string identifier, ClientInfo client, CancellationToken ct = default) =>
+        IssueCodeAsync(OtpPurpose.SignIn, identifier, client, ct);
 
     public async Task<SignInStep> VerifyOtpAsync(string challengeToken, string code, ClientInfo client, CancellationToken ct = default)
     {
@@ -60,7 +34,10 @@ public partial class AuthService
             if (user is not null)
                 await RegisterFailureAsync(user, "wrong_code", client, ct);
             else
+            {
+                _failures.Record(client.IpAddress);
                 await _repo.SaveChangesAsync(ct);
+            }
             throw new AuthFailedException(OtpCodeFailed);
         }
 
@@ -93,6 +70,7 @@ public partial class AuthService
         var invitation = await OpenInvitationAsync(invitationToken, ct);
         var invitee = await FindInviteeAsync(invitation, ct);
         var (channel, address) = Destination(invitation);
+        await RequireHumanIfSuspiciousAsync(client, ct);
 
         var (token, code, challenge) = await NewOtpChallengeAsync(OtpPurpose.Invitation, channel, address, invitee?.Id, invitation, client, ct);
         await _repo.SaveChangesAsync(ct);
@@ -147,9 +125,13 @@ public partial class AuthService
         invitation.AcceptedByUserId = user.Id;
         await _repo.SaveChangesAsync(ct);
         await _repo.UpsertMembershipAsync(user.Id, invitation.Role, ct);
+        if (invitation.PersonId is { } personId)
+            await _repo.LinkPersonAsync(personId, user.Id, ct);
 
         await _audit.CreateAsync(new CreateAuditLogDto(
             "Invitation", invitation.Id.ToString(), "Accepted", user.Id.ToString(), $"role={invitation.Role}", client.IpAddress), ct);
+        if (Roles.IsStaff(invitation.Role))
+            await _alerts.RaiseAsync("New staff member", $"{ContactPoints.Mask(user.Contact)} joined an estate as {invitation.Role}.", ct);
 
         return await AfterFirstFactorAsync(user, "otp", landIn: invitation.EstateId, client, ct);
     }
@@ -161,12 +143,18 @@ public partial class AuthService
         var since = Now.AddHours(-1);
 
         if (await _repo.CountOtpChallengesAsync(identifierHash, since, ct) >= MaxCodesPerAddressPerHour)
-            throw new RateLimitedException(TooManyCodes);
-        if (client.IpAddress is { } ip)
         {
-            if (await _repo.CountOtpChallengesFromIpAsync(ip, null, since, ct) >= MaxCodesPerIpPerHour
-                || (channel == OtpChannel.Sms && await _repo.CountOtpChallengesFromIpAsync(ip, OtpChannel.Sms, since, ct) >= MaxSmsPerIpPerHour))
-                throw new RateLimitedException(TooManyCodes);
+            await _alerts.RaiseAsync("Code limit hit", $"One {channel} address asked for more than {MaxCodesPerAddressPerHour} codes in an hour (IP {client.IpAddress}).", ct);
+            throw new RateLimitedException(TooManyCodes);
+        }
+
+        if (client.IpAddress is { } ip
+            && (await _repo.CountOtpChallengesFromIpAsync(ip, null, since, ct) >= MaxCodesPerIpPerHour
+                || (channel == OtpChannel.Sms && await _repo.CountOtpChallengesFromIpAsync(ip, OtpChannel.Sms, since, ct) >= MaxSmsPerIpPerHour)))
+        {
+            // AUTH-06: a burst of SMS from one IP is how SMS pumping fraud looks.
+            await _alerts.RaiseAsync("Code limit hit", $"IP {ip} asked for too many codes in an hour (last one by {channel}). Possible SMS pumping.", ct);
+            throw new RateLimitedException(TooManyCodes);
         }
 
         var token = AuthSecrets.NewToken();

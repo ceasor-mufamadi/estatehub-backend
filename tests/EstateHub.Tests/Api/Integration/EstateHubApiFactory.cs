@@ -8,6 +8,7 @@ using Grpc.Net.Client;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +31,7 @@ public class EstateHubApiFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Testing");
         builder.UseSetting("RateLimits:SignedInPerMinute", "100000");
         builder.UseSetting("RateLimits:AnonymousPerMinute", "100000");
+        builder.UseSetting("Alerts:Email", AlertsEmail);
 
         builder.ConfigureServices(services =>
         {
@@ -44,13 +46,19 @@ public class EstateHubApiFactory : WebApplicationFactory<Program>
                 services.Remove(descriptor);
             }
 
-            services.AddDbContext<EstateHubDbContext>(o => o.UseInMemoryDatabase(_databaseName));
+            // InMemory has no transactions (the import's all-or-nothing is a Postgres guarantee, covered by the smoke test).
+            services.AddDbContext<EstateHubDbContext>(o => o.UseInMemoryDatabase(_databaseName)
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)));
 
             // InMemory has no SQL functions: read memberships directly (RLS is a Postgres-only layer anyway).
             services.RemoveAll<IMembershipDirectory>();
             services.AddScoped<IMembershipDirectory, InMemoryMembershipDirectory>();
             services.RemoveAll<IInvitationDirectory>();
             services.AddScoped<IInvitationDirectory, InMemoryInvitationDirectory>();
+            services.RemoveAll<IHumanCheck>();
+            services.AddSingleton<IHumanCheck>(HumanCheck);
+            services.RemoveAll<IDeviceDirectory>();
+            services.AddScoped<IDeviceDirectory, InMemoryDeviceDirectory>();
 
             // Messages are recorded, not sent.
             services.RemoveAll<IEmailSender>();
@@ -74,6 +82,12 @@ public class EstateHubApiFactory : WebApplicationFactory<Program>
     public FakeBreachedPasswords BreachedPasswords { get; } = new();
 
     public Outbox Outbox { get; } = new();
+
+    /// <summary>Turnstile stand-in: off by default; tests switch it on.</summary>
+    public FakeHumanCheck HumanCheck { get; } = new();
+
+    /// <summary>Security alerts arrive in the Outbox at this address.</summary>
+    public const string AlertsEmail = "alerts@estatehub.test";
 
     protected override IHost CreateHost(IHostBuilder builder)
     {

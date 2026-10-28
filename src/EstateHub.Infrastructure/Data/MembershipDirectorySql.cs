@@ -87,3 +87,43 @@ public static class InvitationDirectorySql
             """);
     }
 }
+
+/// <summary>
+/// Guard tablets (AUTH-14) are recognised, and paired, before any estate is active.
+/// <c>estatehub_device_estate(kind, hash)</c> returns only the estate id for a pairing-code hash
+/// ('pairing') or a tablet-credential hash ('device'); the hashes come from long random secrets.
+/// Same owner, pinned search_path and EXECUTE rules as the other two functions.
+/// </summary>
+public static class DeviceDirectorySql
+{
+    public static void Create(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.Sql($"""
+            CREATE POLICY device_directory ON guard_devices FOR SELECT USING (current_user = 'estatehub_migrator');
+            CREATE POLICY device_directory ON pairing_codes FOR SELECT USING (current_user = 'estatehub_migrator');
+
+            CREATE FUNCTION {DeviceDirectory.FunctionName}(p_kind text, p_hash text)
+            RETURNS uuid
+            LANGUAGE sql STABLE SECURITY DEFINER
+            SET search_path = public, pg_temp
+            AS $$
+                SELECT CASE p_kind
+                    WHEN 'pairing' THEN (SELECT estate_id FROM pairing_codes WHERE code_hash = p_hash)
+                    WHEN 'device' THEN (SELECT estate_id FROM guard_devices WHERE credential_hash = p_hash)
+                END
+            $$;
+
+            REVOKE ALL ON FUNCTION {DeviceDirectory.FunctionName}(text, text) FROM PUBLIC;
+            GRANT EXECUTE ON FUNCTION {DeviceDirectory.FunctionName}(text, text) TO estatehub_app;
+            """);
+    }
+
+    public static void Drop(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.Sql($"""
+            DROP FUNCTION IF EXISTS {DeviceDirectory.FunctionName}(text, text);
+            DROP POLICY IF EXISTS device_directory ON guard_devices;
+            DROP POLICY IF EXISTS device_directory ON pairing_codes;
+            """);
+    }
+}

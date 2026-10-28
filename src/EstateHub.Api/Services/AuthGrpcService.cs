@@ -19,8 +19,7 @@ public class AuthGrpcService : AuthService.AuthServiceBase
     private readonly IAuthService _auth;
     private readonly ICurrentUser _user;
     private readonly ITokenService _tokens;
-    private readonly ClientIpResolver _ip;
-    private readonly AuthCookieOptions _cookie;
+    private readonly SignInResponses _responses;
     private readonly IHostEnvironment _environment;
     private readonly ILogger<AuthGrpcService> _logger;
 
@@ -28,16 +27,14 @@ public class AuthGrpcService : AuthService.AuthServiceBase
         IAuthService auth,
         ICurrentUser user,
         ITokenService tokens,
-        ClientIpResolver ip,
-        IOptions<AuthCookieOptions> cookie,
+        SignInResponses responses,
         IHostEnvironment environment,
         ILogger<AuthGrpcService> logger)
     {
         _auth = auth;
         _user = user;
         _tokens = tokens;
-        _ip = ip;
-        _cookie = cookie.Value;
+        _responses = responses;
         _environment = environment;
         _logger = logger;
     }
@@ -164,6 +161,147 @@ public class AuthGrpcService : AuthService.AuthServiceBase
         return Complete(await _auth.SwitchEstateAsync(UserId(), SessionId(), estateId, context.CancellationToken), context);
     }
 
+    [Authorize]
+    public override async Task<ListSessionsResponse> ListSessions(ListSessionsRequest request, ServerCallContext context)
+    {
+        var response = new ListSessionsResponse();
+        response.Items.AddRange((await _auth.ListSessionsAsync(UserId(), SessionId(), context.CancellationToken)).Select(s => new SessionEntry
+        {
+            Id = s.Id.ToString(),
+            Device = s.Device,
+            IpAddress = s.IpAddress ?? string.Empty,
+            SignedInAt = Timestamp.FromDateTimeOffset(s.SignedInAt),
+            LastSeenAt = Timestamp.FromDateTimeOffset(s.LastSeenAt),
+            Current = s.IsCurrent,
+        }));
+        return response;
+    }
+
+    [Authorize]
+    public override async Task<RevokeSessionResponse> RevokeSession(RevokeSessionRequest request, ServerCallContext context)
+    {
+        await _auth.RevokeSessionAsync(UserId(), GrpcRequest.RequiredGuid(request.SessionId, "session_id"), Client(context), context.CancellationToken);
+        return new RevokeSessionResponse();
+    }
+
+    [Authorize]
+    public override async Task<SignOutOtherSessionsResponse> SignOutOtherSessions(SignOutOtherSessionsRequest request, ServerCallContext context) =>
+        new() { SignedOut = await _auth.SignOutOtherSessionsAsync(UserId(), SessionId(), Client(context), context.CancellationToken) };
+
+    [Authorize]
+    public override async Task<ChangePasswordResponse> ChangePassword(ChangePasswordRequest request, ServerCallContext context)
+    {
+        await _auth.ChangePasswordAsync(
+            UserId(), SessionId(), NullIfEmpty(request.CurrentPassword), request.NewPassword, Client(context), context.CancellationToken);
+        return new ChangePasswordResponse();
+    }
+
+    [AllowAnonymous]
+    public override async Task<OtpStep> RequestPasswordReset(RequestPasswordResetRequest request, ServerCallContext context) =>
+        ToProto(await _auth.RequestPasswordResetAsync(request.Identifier, Client(context), context.CancellationToken));
+
+    [AllowAnonymous]
+    public override async Task<SignInStepResponse> ResetPassword(ResetPasswordRequest request, ServerCallContext context) =>
+        ToProto(await _auth.ResetPasswordAsync(request.ChallengeToken, request.Code, request.NewPassword, Client(context), context.CancellationToken), context);
+
+    [Authorize]
+    [RequiresRecentMfa]
+    public override async Task<RegenerateRecoveryCodesResponse> RegenerateRecoveryCodes(RegenerateRecoveryCodesRequest request, ServerCallContext context)
+    {
+        var response = new RegenerateRecoveryCodesResponse();
+        response.RecoveryCodes.AddRange(await _auth.RegenerateRecoveryCodesAsync(UserId(), Client(context), context.CancellationToken));
+        return response;
+    }
+
+    [RequiresPermission(Permissions.PlatformImpersonate)]
+    [RequiresRecentMfa]
+    public override async Task<SignedIn> StartSupportAccess(StartSupportAccessRequest request, ServerCallContext context)
+    {
+        var estateId = GrpcRequest.RequiredGuid(request.EstateId, "estate_id");
+        return Complete(await _auth.StartSupportAccessAsync(UserId(), SessionId(), estateId, request.Reason, Client(context), context.CancellationToken), context);
+    }
+
+    [Authorize]
+    public override async Task<SignedIn> EndSupportAccess(EndSupportAccessRequest request, ServerCallContext context) =>
+        Complete(await _auth.EndSupportAccessAsync(UserId(), SessionId(), Client(context), context.CancellationToken), context);
+
+    [Authorize]
+    public override async Task<SetGuardPinResponse> SetGuardPin(SetGuardPinRequest request, ServerCallContext context)
+    {
+        await _auth.SetGuardPinAsync(UserId(), request.Pin, Client(context), context.CancellationToken);
+        return new SetGuardPinResponse();
+    }
+
+    [Authorize]
+    [RequiresRecentMfa]
+    public override async Task<PasskeyOptions> BeginPasskeyRegistration(BeginPasskeyRegistrationRequest request, ServerCallContext context)
+    {
+        var (token, options) = await _auth.BeginPasskeyRegistrationAsync(UserId(), context.CancellationToken);
+        return new PasskeyOptions { ChallengeToken = token, OptionsJson = options };
+    }
+
+    [Authorize]
+    [RequiresRecentMfa]
+    public override async Task<FinishPasskeyRegistrationResponse> FinishPasskeyRegistration(FinishPasskeyRegistrationRequest request, ServerCallContext context)
+    {
+        await _auth.FinishPasskeyRegistrationAsync(UserId(), request.ChallengeToken, request.CredentialJson, request.Name, Client(context), context.CancellationToken);
+        return new FinishPasskeyRegistrationResponse();
+    }
+
+    [AllowAnonymous]
+    public override async Task<PasskeyOptions> BeginPasskeySignIn(BeginPasskeySignInRequest request, ServerCallContext context)
+    {
+        var (token, options) = await _auth.BeginPasskeySignInAsync(Client(context), context.CancellationToken);
+        return new PasskeyOptions { ChallengeToken = token, OptionsJson = options };
+    }
+
+    [AllowAnonymous]
+    public override async Task<SignedIn> FinishPasskeySignIn(FinishPasskeySignInRequest request, ServerCallContext context) =>
+        Complete(await _auth.FinishPasskeySignInAsync(request.ChallengeToken, request.CredentialJson, Client(context), context.CancellationToken), context);
+
+    [Authorize]
+    public override async Task<ListPasskeysResponse> ListPasskeys(ListPasskeysRequest request, ServerCallContext context)
+    {
+        var response = new ListPasskeysResponse();
+        response.Items.AddRange((await _auth.ListPasskeysAsync(UserId(), context.CancellationToken)).Select(p => new PasskeyEntry
+        {
+            Id = p.Id.ToString(),
+            Name = p.Name,
+            AddedAt = Timestamp.FromDateTimeOffset(p.AddedAt),
+            LastUsedAt = p.LastUsedAt is { } used ? Timestamp.FromDateTimeOffset(used) : null,
+        }));
+        return response;
+    }
+
+    [Authorize]
+    [RequiresRecentMfa]
+    public override async Task<RemovePasskeyResponse> RemovePasskey(RemovePasskeyRequest request, ServerCallContext context)
+    {
+        await _auth.RemovePasskeyAsync(UserId(), GrpcRequest.RequiredGuid(request.PasskeyId, "passkey_id"), Client(context), context.CancellationToken);
+        return new RemovePasskeyResponse();
+    }
+
+    [AllowAnonymous]
+    public override async Task<GetSignInReportResponse> GetSignInReport(GetSignInReportRequest request, ServerCallContext context)
+    {
+        var report = await _auth.GetSignInReportAsync(request.ReportToken, context.CancellationToken);
+        return new GetSignInReportResponse
+        {
+            Device = report.Device,
+            IpAddress = report.IpAddress ?? string.Empty,
+            SignedInAt = Timestamp.FromDateTimeOffset(report.SignedInAt),
+            HadPassword = report.HadPassword,
+        };
+    }
+
+    [AllowAnonymous]
+    public override async Task<SecureAccountResponse> SecureAccount(SecureAccountRequest request, ServerCallContext context)
+    {
+        await _auth.SecureAccountAsync(request.ReportToken, Client(context), context.CancellationToken);
+        ClearCookie(context); // if it's opened in a signed-in browser, that session is over too
+        return new SecureAccountResponse();
+    }
+
     [AllowAnonymous]
     public override async Task<SignedIn> DevSignIn(DevSignInRequest request, ServerCallContext context)
     {
@@ -202,47 +340,13 @@ public class AuthGrpcService : AuthService.AuthServiceBase
 
     private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
 
-    /// <summary>Moves a new refresh token into the cookie and maps the rest to the response.</summary>
-    private SignedIn Complete(Application.Auth.SignedIn signedIn, ServerCallContext context)
-    {
-        if (signedIn.RefreshToken is { } refresh)
-            context.GetHttpContext().Response.Cookies.Append(AuthCookieOptions.Name, refresh, CookieOptions(signedIn.RefreshExpiresAt));
+    private SignedIn Complete(Application.Auth.SignedIn signedIn, ServerCallContext context) => _responses.Complete(signedIn, context);
 
-        var response = new SignedIn
-        {
-            AccessToken = signedIn.Access.AccessToken,
-            ExpiresAt = Timestamp.FromDateTimeOffset(signedIn.Access.ExpiresAt),
-            UserId = signedIn.Scope.UserId.ToString(),
-            Email = signedIn.Scope.Email,
-            EstateId = signedIn.Scope.EstateId?.ToString() ?? string.Empty,
-            Role = signedIn.Scope.Role,
-        };
-        response.Permissions.AddRange(signedIn.Scope.Permissions);
-        response.RecoveryCodes.AddRange(signedIn.RecoveryCodes);
-        return response;
-    }
+    private static string? ReadCookie(ServerCallContext context) => SignInResponses.ReadRefreshCookie(context);
 
-    private static string? ReadCookie(ServerCallContext context) =>
-        context.GetHttpContext().Request.Cookies[AuthCookieOptions.Name];
+    private void ClearCookie(ServerCallContext context) => _responses.ClearRefreshCookie(context);
 
-    private void ClearCookie(ServerCallContext context) =>
-        context.GetHttpContext().Response.Cookies.Delete(AuthCookieOptions.Name, CookieOptions(expires: null));
-
-    private CookieOptions CookieOptions(DateTimeOffset? expires) => new()
-    {
-        HttpOnly = true,
-        Secure = _cookie.RefreshCookieSecure,
-        SameSite = SameSiteMode.Strict,
-        Path = AuthCookieOptions.Path,
-        Expires = expires,
-        IsEssential = true,
-    };
-
-    private ClientInfo Client(ServerCallContext context)
-    {
-        var http = context.GetHttpContext();
-        return new ClientInfo(_ip.Resolve(http), http.Request.Headers.UserAgent.ToString());
-    }
+    private ClientInfo Client(ServerCallContext context) => _responses.Client(context);
 
     // [Authorize] guarantees a validated token, and every token EstateHub issues carries both.
     private Guid UserId() => Guid.Parse(_user.UserId!);

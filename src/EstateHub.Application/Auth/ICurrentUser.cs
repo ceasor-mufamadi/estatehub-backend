@@ -33,6 +33,12 @@ public enum ResourceKind
 {
     /// <summary>A user id: the caller themselves.</summary>
     User,
+
+    /// <summary>
+    /// A unit id: staff (estate read) see every unit of their estate; residents only units they own or
+    /// live in today. Privacy between neighbours (SECURITY.md layer 4).
+    /// </summary>
+    Unit,
 }
 
 /// <summary>Answers "may the current caller see/change this record?" for ownership checks.</summary>

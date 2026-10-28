@@ -69,3 +69,26 @@ public sealed class Outbox : EstateHub.Application.Interfaces.IEmailSender, Esta
     /// <summary>The invitation token (after "#") in the latest message to <paramref name="to"/>.</summary>
     public string InvitationTokenFor(string to) => System.Text.RegularExpressions.Regex.Match(LastTo(to), @"/invite#([A-Za-z0-9_-]+)").Groups[1].Value;
 }
+
+/// <summary>Stand-in for the estatehub_device_estate SQL function.</summary>
+public sealed class InMemoryDeviceDirectory(EstateHubDbContext db) : IDeviceDirectory
+{
+    public async Task<Guid?> EstateForDeviceAsync(string credentialHash, CancellationToken ct = default) =>
+        await db.GuardDevices.IgnoreQueryFilters().AsNoTracking()
+            .Where(d => d.CredentialHash == credentialHash).Select(d => (Guid?)d.EstateId).FirstOrDefaultAsync(ct);
+
+    public async Task<Guid?> EstateForPairingCodeAsync(string codeHash, CancellationToken ct = default) =>
+        await db.PairingCodes.IgnoreQueryFilters().AsNoTracking()
+            .Where(c => c.CodeHash == codeHash).Select(c => (Guid?)c.EstateId).FirstOrDefaultAsync(ct);
+}
+
+/// <summary>Turnstile without Cloudflare: off unless a test turns it on; only <see cref="PassingToken"/> passes.</summary>
+public sealed class FakeHumanCheck : IHumanCheck
+{
+    public const string PassingToken = "human-ok";
+
+    public bool Enabled { get; set; }
+
+    public Task<bool> VerifyAsync(string? token, string? ipAddress, CancellationToken ct = default) =>
+        Task.FromResult(token == PassingToken);
+}

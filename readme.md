@@ -39,7 +39,9 @@ docker compose -f docker-compose.dev.yml up -d         # Postgres (dev + test DB
 | Add a migration | `docker compose -f docker-compose.dev.yml run --rm sdk sh -c "dotnet tool restore && dotnet ef migrations add <Name> --project src/EstateHub.Infrastructure --startup-project src/EstateHub.Infrastructure --output-dir Data/Migrations"` |
 | Apply migrations (as `estatehub_migrator`) | `docker compose -f docker-compose.dev.yml run --rm sdk sh -c "dotnet tool restore && dotnet ef database update --project src/EstateHub.Infrastructure --startup-project src/EstateHub.Infrastructure"` |
 | Run the API (watch mode) | `docker compose -f docker-compose.dev.yml --profile app up api` → native gRPC `localhost:5269`, gRPC-Web `localhost:5268` |
-| Mailpit (caught emails) | http://localhost:8025 |
+| Run the cron jobs too (⏰, as production does) | `docker compose -f docker-compose.dev.yml --profile app up api jobs` |
+| Smoke test on real Postgres (RLS, SQL functions, cookies) | `tests/e2e/run-smoke.sh` — uses `estatehub_test` and a temporary API on :5368; your dev data is untouched |
+| Mailpit (caught emails **and texts**) | http://localhost:8025 — providers for real use: [docs/messaging.md](docs/messaging.md) |
 | psql | `docker compose -f docker-compose.dev.yml exec postgres psql -U estatehub_migrator estatehub_dev` |
 | Stop (data kept) | `docker compose -f docker-compose.dev.yml down` |
 | Wipe the databases | `docker compose -f docker-compose.dev.yml down -v` |
@@ -52,6 +54,14 @@ authenticator app is set up at first sign-in on the web app.
 ```bash
 docker compose -f docker-compose.dev.yml run --rm -e ASPNETCORE_ENVIRONMENT=Development sdk \
   dotnet run --project src/EstateHub.Api -- create-super-admin
+```
+
+**Incident: invalidate every access token** (SECURITY.md §7): a new signing key, all others retired.
+Routine rotation every 30 days is ⏰ `SigningKeyRotationJob`'s job.
+
+```bash
+docker compose -f docker-compose.dev.yml run --rm -e ASPNETCORE_ENVIRONMENT=Development sdk \
+  dotnet run --project src/EstateHub.Api -- rotate-signing-keys
 ```
 
 **Trying the API:** in Development, `AuthService/DevSignIn` signs in a throwaway account

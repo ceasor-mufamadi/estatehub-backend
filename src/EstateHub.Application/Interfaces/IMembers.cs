@@ -21,11 +21,21 @@ public interface IMembersService
     Task<MemberDto> ChangeRoleAsync(Guid membershipId, string role, CancellationToken ct = default);
 
     Task RemoveAsync(Guid membershipId, CancellationToken ct = default);
+
+    /// <summary>Lost authenticator: reset a member's MFA (only for roles the caller may grant, never themselves).</summary>
+    Task ResetMfaAsync(Guid membershipId, CancellationToken ct = default);
+
+    /// <summary>Super admin, from the platform: reset any account's MFA by email (e.g. a managing agent's), never their own.</summary>
+    Task ResetAccountMfaAsync(string email, CancellationToken ct = default);
+
+    /// <summary>How many more invitations the active estate may send in the current hour (the hourly cap).</summary>
+    Task<int> InvitationAllowanceAsync(CancellationToken ct = default);
 }
 
-public record InviteRequest(string Name, string? Email, string? Phone, string Role);
+/// <summary><paramref name="PersonId"/>: the estate's person record this is for (accepting links it to the account).</summary>
+public record InviteRequest(string Name, string? Email, string? Phone, string Role, Guid? PersonId = null);
 
-public record MemberDto(Guid MembershipId, Guid UserId, string Name, string? Email, string? Phone, string Role, DateTime Since, bool CanManage);
+public record MemberDto(Guid MembershipId, Guid UserId, string Name, string? Email, string? Phone, string Role, DateTime Since, bool CanManage, bool MfaEnabled);
 
 public record InvitationDto(Guid Id, string Name, string? Email, string? Phone, string Role, DateTime ExpiresAt, DateTime LastSentAt, int SendCount);
 
@@ -44,6 +54,7 @@ public interface IMembersRepository
     Task<Invitation?> GetInvitationAsync(Guid id, CancellationToken ct = default);
     Task<bool> HasPendingInvitationAsync(string? email, string? phone, DateTime now, CancellationToken ct = default);
     Task<int> CountInvitationsSentSinceAsync(DateTime since, CancellationToken ct = default);
+    Task<IReadOnlyList<Invitation>> InvitationsForPersonAsync(Guid personId, CancellationToken ct = default);
     void Add(Invitation invitation);
     Task SaveChangesAsync(CancellationToken ct = default);
 }

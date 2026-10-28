@@ -30,7 +30,19 @@ memberships in every estate before any estate is active, which RLS on `membershi
 - Used by sign-in, `ListMyEstates`, `SwitchEstate` and the per-request session check
   (`IMembershipDirectory`; tests use an EF InMemory stand-in).
 
-Checked by hand in psql on 2026-10-27 as `estatehub_app`: direct read of memberships with no estate
+**A second, narrower one (migration `Invitations`).** Accepting an invitation also happens before an
+estate is active. `estatehub_invitation_estate(token_hash)` returns only the estate id of the
+invitation with that exact hash (the hash of a 256-bit link token, so it can't be used to browse);
+the app then reads the invitation inside that estate. Same owner, pinned `search_path`, EXECUTE for
+`estatehub_app` only, SELECT-only `invitation_directory` policy. Checked in psql 2026-10-27: direct
+read with no estate → 0 rows; Estate B can't see Estate A's invitation; wrong hash → nothing.
+
+**A third, for guard tablets (migration `GuardTabletsAndSupport`).** A tablet is recognised (and
+paired) before any estate is active. `estatehub_device_estate(kind, hash)` returns only the estate
+id for a pairing-code hash (`'pairing'`) or a tablet-credential hash (`'device'`). Same rules as the
+others. Covered by the real-Postgres smoke test (`tests/e2e/run-smoke.sh`).
+
+Membership function checked by hand in psql on 2026-10-27 as `estatehub_app`: direct read of memberships with no estate
 set → 0 rows; the function → only the active membership; dropping the policy or replacing the
 function → refused.
 

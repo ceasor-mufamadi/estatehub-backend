@@ -1,0 +1,255 @@
+syntax = "proto3";
+
+option csharp_namespace = "EstateHub.Api";
+package estatehub.people.v1;
+
+// The estate's people and who owns or lives in which unit (Sprint 3.2). Staff only, except MyUnits /
+// GetMyUnit, which give residents their OWN units and nothing else (privacy between neighbours).
+// Dates are calendar dates in South Africa, "YYYY-MM-DD". Shares are decimal strings ("50.00").
+
+message Person {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string phone = 4;
+  // Linked to an EstateHub account (invitation accepted).
+  bool has_account = 5;
+}
+
+message PersonSummary {
+  Person person = 1;
+  // e.g. "Section 4 (owner)", "Section 9 (tenant)".
+  repeated string units = 2;
+}
+
+message ListPeopleRequest {
+  // Name, email or phone contains this. Empty = everyone (first 500).
+  string search = 1;
+}
+
+message ListPeopleResponse {
+  repeated PersonSummary items = 1;
+}
+
+message PersonInput {
+  string name = 1;
+  string email = 2;
+  // SA mobile.
+  string phone = 3;
+}
+
+message CreatePersonRequest {
+  PersonInput person = 1;
+}
+
+message UpdatePersonRequest {
+  string person_id = 1;
+  PersonInput person = 2;
+}
+
+// An existing person (person_id), or a new one to create.
+message PersonRef {
+  string person_id = 1;
+  PersonInput new_person = 2;
+}
+
+message OwnershipEntry {
+  string id = 1;
+  Person person = 2;
+  string share_percent = 3;
+  string from_date = 4;
+  // Empty while they still own it.
+  string to_date = 5;
+  bool current = 6;
+}
+
+message OccupancyEntry {
+  string id = 1;
+  Person person = 2;
+  // owner_occupier, tenant or other.
+  string kind = 3;
+  string from_date = 4;
+  string to_date = 5;
+  bool current = 6;
+}
+
+message GetUnitRequest {
+  string unit_id = 1;
+}
+
+message UnitDetail {
+  string unit_id = 1;
+  int32 section_number = 2;
+  string door_number = 3;
+  string block_name = 4;
+  string participation_quota = 5;
+  repeated OwnershipEntry owners = 6;
+  repeated OccupancyEntry occupants = 7;
+  // Sum of the current owners' shares (100.00 when complete).
+  string current_owner_share = 8;
+}
+
+message AddOwnerRequest {
+  string unit_id = 1;
+  PersonRef person = 2;
+  string share_percent = 3;
+  // Empty = today.
+  string from_date = 4;
+}
+
+message AddOccupantRequest {
+  string unit_id = 1;
+  PersonRef person = 2;
+  string kind = 3;
+  string from_date = 4;
+}
+
+message EndOwnershipRequest {
+  string ownership_id = 1;
+  string to_date = 2;
+}
+
+message RemoveOwnershipRequest {
+  string ownership_id = 1;
+}
+
+message EndOccupancyRequest {
+  string occupancy_id = 1;
+  string to_date = 2;
+}
+
+message RemoveOccupancyRequest {
+  string occupancy_id = 1;
+}
+
+message InvitePersonRequest {
+  string person_id = 1;
+}
+
+message InvitePersonResponse {
+  // They already had an account here: linked, no invitation sent.
+  bool linked = 1;
+  bool invited = 2;
+  // Where the invitation went (masked).
+  string sent_to = 3;
+}
+
+message MyUnitsRequest {}
+
+message MyUnit {
+  string unit_id = 1;
+  int32 section_number = 2;
+  string door_number = 3;
+  string block_name = 4;
+  // owner, tenant or other.
+  string relationship = 5;
+  string since = 6;
+}
+
+message MyUnitsResponse {
+  repeated MyUnit items = 1;
+}
+
+message GetMyUnitRequest {
+  string unit_id = 1;
+}
+
+// ---------- resident portal (slice 3.4) ----------
+
+message GetMyDetailsRequest {}
+
+message PrivacyNoticeSection {
+  string heading = 1;
+  string text = 2;
+}
+
+message MyDetails {
+  // False when the caller has no person record here (e.g. staff): nothing to acknowledge or edit.
+  bool has_record = 1;
+  string name = 2;
+  string email = 3;
+  string phone = 4;
+  bool notices_by_email = 5;
+  bool notices_by_sms = 6;
+  string notice_version = 7;
+  bool notice_acknowledged = 8;
+  repeated PrivacyNoticeSection notice = 9;
+}
+
+message AcknowledgePrivacyNoticeRequest {
+  string version = 1;
+}
+
+message UpdateMyPreferencesRequest {
+  bool notices_by_email = 1;
+  bool notices_by_sms = 2;
+}
+
+message StartContactChangeRequest {
+  // New email or SA mobile; a code goes to it.
+  string new_contact = 1;
+}
+
+message StartContactChangeResponse {
+  string challenge_token = 1;
+  // email or sms.
+  string channel = 2;
+  // Masked.
+  string destination = 3;
+}
+
+message ConfirmContactChangeRequest {
+  string challenge_token = 1;
+  string code = 2;
+}
+
+message ExportMyDataRequest {}
+
+message PersonDataFile {
+  string file_name = 1;
+  // JSON.
+  bytes content = 2;
+}
+
+// ---------- POPIA tools for staff ----------
+
+message ExportPersonRequest {
+  string person_id = 1;
+}
+
+message AnonymisePersonRequest {
+  string person_id = 1;
+  // Must match the person's name (typed to confirm).
+  string confirm_name = 2;
+}
+
+message AnonymisePersonResponse {}
+
+service PeopleService {
+  rpc ListPeople(ListPeopleRequest) returns (ListPeopleResponse);
+  rpc CreatePerson(CreatePersonRequest) returns (Person);
+  rpc UpdatePerson(UpdatePersonRequest) returns (Person);
+  rpc GetUnit(GetUnitRequest) returns (UnitDetail);
+  rpc AddOwner(AddOwnerRequest) returns (UnitDetail);
+  rpc EndOwnership(EndOwnershipRequest) returns (UnitDetail);
+  // Data-entry corrections only (sold units: EndOwnership keeps the history).
+  rpc RemoveOwnership(RemoveOwnershipRequest) returns (UnitDetail);
+  rpc AddOccupant(AddOccupantRequest) returns (UnitDetail);
+  rpc EndOccupancy(EndOccupancyRequest) returns (UnitDetail);
+  rpc RemoveOccupancy(RemoveOccupancyRequest) returns (UnitDetail);
+  // Portal access: owner or tenant role from their current relationship. Needs MFA within 15 minutes.
+  rpc InvitePerson(InvitePersonRequest) returns (InvitePersonResponse);
+  // Residents: their own units only.
+  rpc MyUnits(MyUnitsRequest) returns (MyUnitsResponse);
+  rpc GetMyUnit(GetMyUnitRequest) returns (MyUnit);
+  // Residents: own details, privacy notice, preferences. Contact changes and own data need a recent sign-in.
+  rpc GetMyDetails(GetMyDetailsRequest) returns (MyDetails);
+  rpc AcknowledgePrivacyNotice(AcknowledgePrivacyNoticeRequest) returns (MyDetails);
+  rpc UpdateMyPreferences(UpdateMyPreferencesRequest) returns (MyDetails);
+  rpc StartContactChange(StartContactChangeRequest) returns (StartContactChangeResponse);
+  rpc ConfirmContactChange(ConfirmContactChangeRequest) returns (MyDetails);
+  rpc ExportMyData(ExportMyDataRequest) returns (PersonDataFile);
+  // Staff, recent MFA: everything held about a person; anonymise a former resident.
+  rpc ExportPerson(ExportPersonRequest) returns (PersonDataFile);
+  rpc AnonymisePerson(AnonymisePersonRequest) returns (AnonymisePersonResponse);
+}

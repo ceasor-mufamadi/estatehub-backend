@@ -16,7 +16,8 @@ public record TokenRequest(
     string Role,
     IReadOnlyCollection<string> Permissions,
     IReadOnlyCollection<string> AuthMethods,
-    DateTimeOffset AuthTime);
+    DateTimeOffset AuthTime,
+    string? ActorId = null);
 
 public record IssuedToken(string AccessToken, DateTimeOffset ExpiresAt);
 
@@ -30,6 +31,9 @@ public static class TokenClaims
     public const string Permission = "perm";
     public const string AuthMethod = "amr";
     public const string AuthTime = "auth_time";
+
+    /// <summary>RFC 8693 actor: {"sub": "&lt;super admin id&gt;"} on support-access tokens (AUTH-13).</summary>
+    public const string Actor = "act";
 
     public const string MfaMethod = "mfa";
 }

@@ -29,6 +29,7 @@ public class FeaturesGrpcService : FeaturesService.FeaturesServiceBase
         {
             UserId = _user.UserId ?? string.Empty,
             Role = _user.Role ?? string.Empty,
+            Mfa = _user.AuthMethods.Contains(TokenClaims.MfaMethod),
         };
         response.Permissions.AddRange(_user.Permissions.Order(StringComparer.Ordinal));
 

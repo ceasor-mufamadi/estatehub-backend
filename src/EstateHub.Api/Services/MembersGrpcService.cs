@@ -35,11 +35,11 @@ public class MembersGrpcService : MembersService.MembersServiceBase
             new Application.Interfaces.InviteRequest(request.Name, request.Email, request.Phone, request.Role), context.CancellationToken));
 
     [RequiresPermission(Permissions.MembersManage)]
-    public override async Task<PendingInvitation> ResendInvitation(InvitationIdRequest request, ServerCallContext context) =>
+    public override async Task<PendingInvitation> ResendInvitation(ResendInvitationRequest request, ServerCallContext context) =>
         ToProto(await _members.ResendAsync(GrpcRequest.RequiredGuid(request.InvitationId, "invitation_id"), context.CancellationToken));
 
     [RequiresPermission(Permissions.MembersManage)]
-    public override async Task<RevokeInvitationResponse> RevokeInvitation(InvitationIdRequest request, ServerCallContext context)
+    public override async Task<RevokeInvitationResponse> RevokeInvitation(RevokeInvitationRequest request, ServerCallContext context)
     {
         await _members.RevokeAsync(GrpcRequest.RequiredGuid(request.InvitationId, "invitation_id"), context.CancellationToken);
         return new RevokeInvitationResponse();
@@ -58,6 +58,14 @@ public class MembersGrpcService : MembersService.MembersServiceBase
         return new RemoveMemberResponse();
     }
 
+    [RequiresPermission(Permissions.MembersManage)]
+    [RequiresRecentMfa]
+    public override async Task<ResetMemberMfaResponse> ResetMemberMfa(ResetMemberMfaRequest request, ServerCallContext context)
+    {
+        await _members.ResetMfaAsync(GrpcRequest.RequiredGuid(request.MembershipId, "membership_id"), context.CancellationToken);
+        return new ResetMemberMfaResponse();
+    }
+
     private static Member ToProto(MemberDto m) => new()
     {
         MembershipId = m.MembershipId.ToString(),
@@ -68,6 +76,7 @@ public class MembersGrpcService : MembersService.MembersServiceBase
         Role = m.Role,
         Since = Timestamp.FromDateTime(DateTime.SpecifyKind(m.Since, DateTimeKind.Utc)),
         CanManage = m.CanManage,
+        MfaEnabled = m.MfaEnabled,
     };
 
     private static PendingInvitation ToProto(InvitationDto i) => new()

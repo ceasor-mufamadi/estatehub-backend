@@ -14,7 +14,13 @@ import "google/protobuf/timestamp.proto";
 // Resident:       RequestOtp (email or SA mobile) → VerifyOtp → SignedIn (or an mfa step for staff)
 // Invitation:     GetInvitation (link) → StartInvitation (code to the invited address)
 //                   → AcceptInvitation (code [+ new password for staff]) → SignedIn or mfa step
+// Passkey:        BeginPasskeySignIn → navigator.credentials.get(options) → FinishPasskeySignIn → SignedIn
 // Page load:      Refresh (cookie) → SignedIn, or UNAUTHENTICATED when there is no live session
+//
+// Human check (AUTH-05): after repeated failures from an IP address, PasswordSignIn, RequestOtp,
+// RequestPasswordReset and StartInvitation answer FAILED_PRECONDITION with the trailer
+// "estatehub-challenge: turnstile". Show Cloudflare Turnstile and repeat the call with its token in
+// the "x-human-check" header.
 
 message PasswordSignInRequest {
   string email = 1;
@@ -51,6 +57,8 @@ message SignedIn {
   // Only right after setting up MFA. Show once; they are never shown again.
   repeated string recovery_codes = 7;
   string email = 8;
+  // Set during support access (role "support"): when the read-only access ends by itself.
+  google.protobuf.Timestamp support_ends_at = 9;
 }
 
 message VerifyMfaRequest {
@@ -180,6 +188,143 @@ message AcceptInvitationRequest {
   string new_password = 3;
 }
 
+message ListSessionsRequest {}
+
+message SessionEntry {
+  string id = 1;
+  // "Chrome on macOS".
+  string device = 2;
+  string ip_address = 3;
+  google.protobuf.Timestamp signed_in_at = 4;
+  google.protobuf.Timestamp last_seen_at = 5;
+  // This browser.
+  bool current = 6;
+}
+
+message ListSessionsResponse {
+  repeated SessionEntry items = 1;
+}
+
+message RevokeSessionRequest {
+  string session_id = 1;
+}
+
+message RevokeSessionResponse {}
+
+message SignOutOtherSessionsRequest {}
+
+message SignOutOtherSessionsResponse {
+  int32 signed_out = 1;
+}
+
+message ChangePasswordRequest {
+  // Empty only for accounts that never had a password (residents who sign in with codes).
+  string current_password = 1;
+  string new_password = 2;
+}
+
+message ChangePasswordResponse {}
+
+message RequestPasswordResetRequest {
+  // Email address or SA mobile number.
+  string identifier = 1;
+}
+
+message ResetPasswordRequest {
+  string challenge_token = 1;
+  string code = 2;
+  string new_password = 3;
+}
+
+message RegenerateRecoveryCodesRequest {}
+
+message RegenerateRecoveryCodesResponse {
+  // Shown once; the previous codes stop working.
+  repeated string recovery_codes = 1;
+}
+
+message StartSupportAccessRequest {
+  string estate_id = 1;
+  // Why you need access. Shown to the estate in its activity log (at least 10 characters).
+  string reason = 2;
+}
+
+message EndSupportAccessRequest {}
+
+message SetGuardPinRequest {
+  // Exactly 6 digits; not repeated or consecutive digits.
+  string pin = 1;
+}
+
+message SetGuardPinResponse {}
+
+message BeginPasskeyRegistrationRequest {}
+
+// Also BeginPasskeySignIn's response.
+message PasskeyOptions {
+  // Send back with the finish call.
+  string challenge_token = 1;
+  // PublicKeyCredential{Creation,Request}OptionsJSON for the browser.
+  string options_json = 2;
+}
+
+message FinishPasskeyRegistrationRequest {
+  string challenge_token = 1;
+  // The credential's toJSON() from navigator.credentials.create().
+  string credential_json = 2;
+  // e.g. "MacBook Touch ID".
+  string name = 3;
+}
+
+message FinishPasskeyRegistrationResponse {}
+
+message BeginPasskeySignInRequest {}
+
+message FinishPasskeySignInRequest {
+  string challenge_token = 1;
+  // The credential's toJSON() from navigator.credentials.get().
+  string credential_json = 2;
+}
+
+message ListPasskeysRequest {}
+
+message PasskeyEntry {
+  string id = 1;
+  string name = 2;
+  google.protobuf.Timestamp added_at = 3;
+  google.protobuf.Timestamp last_used_at = 4;
+}
+
+message ListPasskeysResponse {
+  repeated PasskeyEntry items = 1;
+}
+
+message RemovePasskeyRequest {
+  string passkey_id = 1;
+}
+
+message RemovePasskeyResponse {}
+
+message GetSignInReportRequest {
+  // From the "This wasn't me" link in a new sign-in email (the part after #).
+  string report_token = 1;
+}
+
+message GetSignInReportResponse {
+  // "Chrome on Android".
+  string device = 1;
+  string ip_address = 2;
+  google.protobuf.Timestamp signed_in_at = 3;
+  // The account had a password, which securing it cancels.
+  bool had_password = 4;
+}
+
+message SecureAccountRequest {
+  string report_token = 1;
+}
+
+message SecureAccountResponse {}
+
 message GetJwksRequest {}
 
 message GetJwksResponse {
@@ -207,7 +352,33 @@ service AuthService {
   // Signed in: ends every session of the caller, on every device.
   rpc LogoutAll(LogoutAllRequest) returns (LogoutAllResponse);
   rpc ListMyEstates(ListMyEstatesRequest) returns (ListMyEstatesResponse);
+  // Account security: the caller's own devices, password and recovery codes.
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
+  rpc SignOutOtherSessions(SignOutOtherSessionsRequest) returns (SignOutOtherSessionsResponse);
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+  // Forgot password: a code to the address, then ResetPassword. Same answer for unknown addresses.
+  rpc RequestPasswordReset(RequestPasswordResetRequest) returns (OtpStep);
+  rpc ResetPassword(ResetPasswordRequest) returns (SignInStepResponse);
+  // Needs MFA within 15 minutes.
+  rpc RegenerateRecoveryCodes(RegenerateRecoveryCodesRequest) returns (RegenerateRecoveryCodesResponse);
   rpc SwitchEstate(SwitchEstateRequest) returns (SignedIn);
+  // Passkeys (AUTH-03): adding one needs MFA within 15 minutes; signing in with one counts as MFA.
+  rpc BeginPasskeyRegistration(BeginPasskeyRegistrationRequest) returns (PasskeyOptions);
+  rpc FinishPasskeyRegistration(FinishPasskeyRegistrationRequest) returns (FinishPasskeyRegistrationResponse);
+  rpc BeginPasskeySignIn(BeginPasskeySignInRequest) returns (PasskeyOptions);
+  rpc FinishPasskeySignIn(FinishPasskeySignInRequest) returns (SignedIn);
+  rpc ListPasskeys(ListPasskeysRequest) returns (ListPasskeysResponse);
+  rpc RemovePasskey(RemovePasskeyRequest) returns (RemovePasskeyResponse);
+  // "This wasn't me" from a new sign-in email: what it was, then secure the account (every device
+  // signed out, password cancelled, operator alerted). NOT_FOUND for a used or expired link.
+  rpc GetSignInReport(GetSignInReportRequest) returns (GetSignInReportResponse);
+  rpc SecureAccount(SecureAccountRequest) returns (SecureAccountResponse);
+  // Super admin: read-only support access to one estate for 30 minutes (AUTH-13). Needs MFA within 15 minutes.
+  rpc StartSupportAccess(StartSupportAccessRequest) returns (SignedIn);
+  rpc EndSupportAccess(EndSupportAccessRequest) returns (SignedIn);
+  // A guard's PIN for this estate's tablets (AUTH-14).
+  rpc SetGuardPin(SetGuardPinRequest) returns (SetGuardPinResponse);
   // Disabled (UNIMPLEMENTED) outside the Development and Testing environments.
   rpc DevSignIn(DevSignInRequest) returns (SignedIn);
   rpc GetJwks(GetJwksRequest) returns (GetJwksResponse);

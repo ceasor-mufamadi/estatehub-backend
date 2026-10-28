@@ -3,6 +3,7 @@ using EstateHub.Application.DTOs;
 using EstateHub.Application.Interfaces;
 using EstateHub.Application.Tenancy;
 using EstateHub.Domain.Entities;
+using Microsoft.Extensions.Logging;
 
 namespace EstateHub.Application.Services;
 
@@ -58,6 +59,13 @@ public partial class AuthService : IAuthService
     private readonly IInvitationDirectory _invitations;
     private readonly IEmailSender _email;
     private readonly ISmsSender _sms;
+    private readonly IDeviceDirectory _devices;
+    private readonly IAlerts _alerts;
+    private readonly IPasskeys _passkeys;
+    private readonly IAppLinks _links;
+    private readonly IHumanCheck _humans;
+    private readonly ISignInFailures _failures;
+    private readonly ILogger<AuthService> _logger;
     private readonly TimeProvider _clock;
 
     public AuthService(
@@ -74,7 +82,14 @@ public partial class AuthService : IAuthService
         IInvitationDirectory invitations,
         IEmailSender email,
         ISmsSender sms,
-        TimeProvider clock)
+        IDeviceDirectory devices,
+        IAlerts alerts,
+        IPasskeys passkeys,
+        IAppLinks links,
+        IHumanCheck humans,
+        ISignInFailures failures,
+        TimeProvider clock,
+        ILogger<AuthService> logger)
     {
         _repo = repo;
         _directory = directory;
@@ -89,6 +104,13 @@ public partial class AuthService : IAuthService
         _invitations = invitations;
         _email = email;
         _sms = sms;
+        _devices = devices;
+        _alerts = alerts;
+        _passkeys = passkeys;
+        _links = links;
+        _humans = humans;
+        _failures = failures;
+        _logger = logger;
         _clock = clock;
         _dummyHash = new Lazy<string>(() => _passwords.Hash(AuthSecrets.NewToken()));
     }
@@ -102,10 +124,13 @@ public partial class AuthService : IAuthService
         if (email.Length == 0 || password.Length == 0 || password.Length > MaxPasswordLength)
             throw new AuthFailedException(SignInFailed);
 
+        await RequireHumanIfSuspiciousAsync(client, ct);
+
         var user = await _repo.FindUserByEmailAsync(email, ct);
         if (user?.PasswordHash is null || user.Status != UserStatus.Active)
         {
             _passwords.Verify(_dummyHash.Value, password, out _);
+            _failures.Record(client.IpAddress);
             await AuditAsync(user?.Id.ToString() ?? "unknown", "SignInFailed", "anonymous", client, $"email={Truncate(email, 254)}", ct);
             throw new AuthFailedException(SignInFailed);
         }
@@ -161,6 +186,11 @@ public partial class AuthService : IAuthService
         return new SignInStep(null, token, challenge.IsEnrolment, Utc(challenge.ExpiresAt));
     }
 
+    private Task AlertIfSuperAdminAsync(User user, ClientInfo client, CancellationToken ct) =>
+        user.IsSuperAdmin
+            ? _alerts.RaiseAsync("Super admin signed in", $"{ContactPoints.Mask(user.Contact)} signed in from {DeviceNames.Describe(client.UserAgent)} (IP {client.IpAddress}).", ct)
+            : Task.CompletedTask;
+
     private static string MethodName(string factor) => factor == "otp" ? "code" : "password";
 
     public async Task<SignedIn> VerifyMfaAsync(string challengeToken, string code, ClientInfo client, CancellationToken ct = default)
@@ -180,6 +210,7 @@ public partial class AuthService : IAuthService
         ResetFailures(user);
         var signedIn = await StartSessionAsync(user, [challenge.FirstFactor, TokenClaims.MfaMethod], challenge.LandInEstateId, client, ct);
         await AuditAsync(user.Id.ToString(), "SignedIn", user.Id.ToString(), client, $"method={MethodName(challenge.FirstFactor)}+{method}", ct);
+        await AlertIfSuperAdminAsync(user, client, ct);
         return signedIn;
     }
 
@@ -226,6 +257,7 @@ public partial class AuthService : IAuthService
         var signedIn = await StartSessionAsync(user, [challenge.FirstFactor, TokenClaims.MfaMethod], challenge.LandInEstateId, client, ct);
         await AuditAsync(user.Id.ToString(), "MfaEnrolled", user.Id.ToString(), client, "method=totp", ct);
         await AuditAsync(user.Id.ToString(), "SignedIn", user.Id.ToString(), client, $"method={MethodName(challenge.FirstFactor)}+totp", ct);
+        await AlertIfSuperAdminAsync(user, client, ct);
         return signedIn with { RecoveryCodes = codes };
     }
 
@@ -252,6 +284,8 @@ public partial class AuthService : IAuthService
             Revoke(session, "refresh_token_reused");
             await _repo.SaveChangesAsync(ct);
             await AuditAsync(user!.Id.ToString(), "RefreshTokenReused", user.Id.ToString(), client, $"session={session.Id}", ct);
+            await _alerts.RaiseAsync("Stolen sign-in token detected",
+                $"An old refresh token for {ContactPoints.Mask(user.Contact)} was used again (IP {client.IpAddress}). That session has been ended.", ct);
             throw new AuthFailedException(SessionEnded);
         }
 
@@ -338,6 +372,7 @@ public partial class AuthService : IAuthService
             ?? throw new KeyNotFoundException("Estate not found.");
 
         session.ActiveEstateId = estateId;
+        ClearSupportAccess(session);
         await _repo.SaveChangesAsync(ct);
         _validator.Forget(session.Id);
 
@@ -350,8 +385,8 @@ public partial class AuthService : IAuthService
         label = (label ?? string.Empty).Trim().ToLowerInvariant();
         if (label.Length is 0 or > 50 || !label.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.'))
             throw new ArgumentException("user_id must be 1–50 letters, digits, '-', '_' or '.'.");
-        if (!RolePermissions.IsKnownRole(role))
-            throw new ArgumentException($"Unknown role '{role}'. Known: {string.Join(", ", RolePermissions.AllRoles)}.");
+        if (!RolePermissions.IsKnownRole(role) || role == Roles.Support)
+            throw new ArgumentException($"Unknown role '{role}'. Known: {string.Join(", ", RolePermissions.AllRoles.Where(r => r != Roles.Support))}.");
         if (role == Roles.SuperAdmin)
             estateId = null;
         else if (estateId is null)
@@ -421,10 +456,11 @@ public partial class AuthService : IAuthService
     }
 
     private async Task<SignedIn> StartSessionAsync(
-        User user, string[] methods, Guid? estateId, ClientInfo client, CancellationToken ct, DateTime? authTime = null)
+        User user, string[] methods, Guid? estateId, ClientInfo client, CancellationToken ct, DateTime? authTime = null, Guid? guardDeviceId = null)
     {
         var memberships = await _directory.ForUserAsync(user.Id, ct);
-        var isStaff = AuthScopes.IsStaff(user, memberships);
+        // A guard's tablet session is a 12-hour shift, like staff sessions (no sliding).
+        var isStaff = AuthScopes.IsStaff(user, memberships) || guardDeviceId is not null;
 
         var session = new AuthSession
         {
@@ -438,12 +474,14 @@ public partial class AuthService : IAuthService
             SecurityStamp = user.SecurityStamp,
             IpAddress = client.IpAddress,
             UserAgent = Truncate(client.UserAgent, MaxUserAgentLength),
+            GuardDeviceId = guardDeviceId,
         };
 
         var refresh = AuthSecrets.NewToken();
         _repo.Add(session);
         _repo.Add(new RefreshToken { SessionId = session.Id, TokenHash = AuthSecrets.Hash(refresh), ExpiresAt = session.ExpiresAt });
         await _repo.SaveChangesAsync(ct);
+        await NotifyNewDeviceAsync(user, session, client, ct);
 
         return await IssueAsync(user, session, refresh, ct, memberships);
     }
@@ -458,21 +496,26 @@ public partial class AuthService : IAuthService
         memberships ??= await _directory.ForUserAsync(user.Id, ct);
         var methods = AuthScopes.ParseMethods(session.AuthMethods);
 
-        var role = AuthScopes.RoleFor(user, methods, session.ActiveEstateId, memberships);
+        var role = AuthScopes.RoleForSession(user, session, session.ActiveEstateId, memberships, Now);
         if (role is null)
         {
+            // Membership gone or support access over: back to platform level.
             session.ActiveEstateId = null;
+            ClearSupportAccess(session);
             await _repo.SaveChangesAsync(ct);
             role = AuthScopes.RoleFor(user, methods, null, memberships) ?? Roles.None;
         }
 
+        var supporting = role == Roles.Support;
         var permissions = RolePermissions.For(role);
         var access = _tokens.Issue(new TokenRequest(
-            user.Id.ToString(), session.Id, session.ActiveEstateId, role, permissions, methods.ToArray(), Utc(session.AuthTime)));
+            user.Id.ToString(), session.Id, session.ActiveEstateId, role, permissions, methods.ToArray(), Utc(session.AuthTime),
+            ActorId: supporting ? user.Id.ToString() : null));
 
         return new SignedIn(
             access,
-            new AccessScope(user.Id, user.Contact, session.Id, session.ActiveEstateId, role, permissions),
+            new AccessScope(user.Id, user.Contact, session.Id, session.ActiveEstateId, role, permissions,
+                supporting ? Utc(session.ImpersonationEndsAt!.Value) : null),
             refreshToken,
             refreshToken is null ? null : Utc(session.ExpiresAt),
             []);
@@ -548,6 +591,7 @@ public partial class AuthService : IAuthService
     /// <summary>AUTH-05: after 5 failures the account pauses for 15 min, then 30, 60 … (max 24 h).</summary>
     private async Task RegisterFailureAsync(User user, string reason, ClientInfo client, CancellationToken ct)
     {
+        _failures.Record(client.IpAddress);
         user.FailedSignInCount++;
         var lockedOut = user.FailedSignInCount >= MaxFailedAttempts;
         if (lockedOut)
@@ -561,7 +605,11 @@ public partial class AuthService : IAuthService
         await _repo.SaveChangesAsync(ct);
         await AuditAsync(user.Id.ToString(), "SignInFailed", user.Id.ToString(), client, $"reason={reason}", ct);
         if (lockedOut)
+        {
             await AuditAsync(user.Id.ToString(), "LockedOut", "system", client, $"until={user.LockoutEnd:O}", ct);
+            await _alerts.RaiseAsync("Account locked",
+                $"{ContactPoints.Mask(user.Contact)} is locked until {Sast(user.LockoutEnd!.Value):HH:mm} after repeated failed sign-ins (IP {client.IpAddress}).", ct);
+        }
     }
 
     private static void ResetFailures(User user)

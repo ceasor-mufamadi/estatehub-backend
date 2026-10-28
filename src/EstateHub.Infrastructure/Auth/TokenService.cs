@@ -8,12 +8,12 @@ namespace EstateHub.Infrastructure.Auth;
 
 public sealed class TokenService : ITokenService
 {
-    private readonly SigningKeyStore _keys;
+    private readonly SigningKeyRing _keys;
     private readonly JwtSettings _settings;
     private readonly TimeProvider _clock;
     private readonly JsonWebTokenHandler _handler = new();
 
-    public TokenService(SigningKeyStore keys, IOptions<JwtSettings> settings, TimeProvider clock)
+    public TokenService(SigningKeyRing keys, IOptions<JwtSettings> settings, TimeProvider clock)
     {
         _keys = keys;
         _settings = settings.Value;
@@ -41,6 +41,8 @@ public sealed class TokenService : ITokenService
 
         if (request.EstateId is { } estateId)
             claims[TokenClaims.EstateId] = estateId.ToString();
+        if (request.ActorId is { } actor)
+            claims[TokenClaims.Actor] = new Dictionary<string, object> { [TokenClaims.Subject] = actor };
         if (request.Role == Roles.None)
             claims.Remove(TokenClaims.Role);
 
@@ -60,15 +62,13 @@ public sealed class TokenService : ITokenService
 
     public string GetJwksJson()
     {
-        var jwk = JsonWebKeyConverter.ConvertFromECDsaSecurityKey(_keys.ValidationKey);
-
+        // Every live key (during a rotation: the new one and the one being retired).
         // Written by hand so only public members can ever appear (no "d").
-        return JsonSerializer.Serialize(new
+        var keys = _keys.ValidationKeys.Select(key =>
         {
-            keys = new[]
-            {
-                new { kty = jwk.Kty, crv = jwk.Crv, x = jwk.X, y = jwk.Y, kid = _keys.KeyId, use = "sig", alg = "ES256" },
-            },
+            var jwk = JsonWebKeyConverter.ConvertFromECDsaSecurityKey(key);
+            return new { kty = jwk.Kty, crv = jwk.Crv, x = jwk.X, y = jwk.Y, kid = key.KeyId, use = "sig", alg = "ES256" };
         });
+        return JsonSerializer.Serialize(new { keys });
     }
 }

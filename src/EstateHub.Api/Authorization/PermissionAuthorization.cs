@@ -1,5 +1,7 @@
 using EstateHub.Application.Auth;
+using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace EstateHub.Api.Authorization;
 
@@ -44,25 +46,45 @@ public sealed class PermissionPolicyProvider : IAuthorizationPolicyProvider
 /// <summary>Succeeds when the token carries the permission, or the unrestricted (super admin) one.</summary>
 public sealed class PermissionHandler : AuthorizationHandler<PermissionRequirement>
 {
-    private readonly ILogger<PermissionHandler> _logger;
+    /// <summary>This many refusals for one user within <see cref="BurstWindow"/> raises an alert (SECURITY.md layer 12).</summary>
+    public const int BurstThreshold = 20;
+    public static readonly TimeSpan BurstWindow = TimeSpan.FromMinutes(5);
 
-    public PermissionHandler(ILogger<PermissionHandler> logger)
+    private readonly ILogger<PermissionHandler> _logger;
+    private readonly IAlerts _alerts;
+    private readonly IMemoryCache _counts;
+
+    public PermissionHandler(ILogger<PermissionHandler> logger, IAlerts alerts, IMemoryCache counts)
     {
         _logger = logger;
+        _alerts = alerts;
+        _counts = counts;
     }
 
-    protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionRequirement requirement)
+    protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, PermissionRequirement requirement)
     {
         var granted = context.User.FindAll(TokenClaims.Permission).Select(c => c.Value)
             .Any(p => string.Equals(p, requirement.Permission, StringComparison.Ordinal)
                    || string.Equals(p, Permissions.Unrestricted, StringComparison.Ordinal));
 
         if (granted)
+        {
             context.Succeed(requirement);
-        else
-            _logger.LogInformation("Denied {Permission} for {User}", requirement.Permission,
-                context.User.FindFirst(TokenClaims.Subject)?.Value ?? "anonymous");
+            return;
+        }
 
-        return Task.CompletedTask;
+        var user = context.User.FindFirst(TokenClaims.Subject)?.Value ?? "anonymous";
+        _logger.LogInformation("Denied {Permission} for {User}", requirement.Permission, user);
+
+        // A user hitting many things they may not do is probing (a curious resident, a stolen account).
+        var key = $"denied:{user}";
+        var count = _counts.GetOrCreate(key, entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = BurstWindow;
+            return new StrongBox<int>();
+        })!;
+        if (Interlocked.Increment(ref count.Value) == BurstThreshold)
+            await _alerts.RaiseAsync("Permission-denied burst",
+                $"User {user} was refused {BurstThreshold} times within {BurstWindow.TotalMinutes:0} minutes (last: {requirement.Permission}).");
     }
 }

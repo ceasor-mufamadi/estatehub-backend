@@ -44,6 +44,12 @@ message InviteToEstateResponse {
   string invitation_id = 1;
 }
 
+message ResetUserMfaRequest {
+  string email = 1;
+}
+
+message ResetUserMfaResponse {}
+
 service PlatformService {
   rpc CreateEstate(CreateEstateRequest) returns (EstateEntry);
   rpc ListEstates(ListEstatesRequest) returns (ListEstatesResponse);
@@ -51,4 +57,6 @@ service PlatformService {
   rpc SetEstateFeature(SetEstateFeatureRequest) returns (EstateEntry);
   // The first staff of an estate. Needs MFA within the last 15 minutes.
   rpc InviteToEstate(InviteToEstateRequest) returns (InviteToEstateResponse);
+  // Lost authenticator of any account (e.g. a managing agent). Needs MFA within 15 minutes.
+  rpc ResetUserMfa(ResetUserMfaRequest) returns (ResetUserMfaResponse);
 }

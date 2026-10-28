@@ -1,0 +1,132 @@
+syntax = "proto3";
+
+option csharp_namespace = "EstateHub.Api";
+package estatehub.imports.v1;
+
+import "google/protobuf/timestamp.proto";
+import "Protos/streaming.proto";
+
+// Spreadsheet import of units, owners and tenants (slice 3.3). Upload → preview → commit (queued, one
+// transaction) → invitations in batches within the estate's hourly cap. Staff with imports.run only.
+
+message GetImportTemplateRequest {}
+
+message ImportTemplate {
+  string file_name = 1;
+  bytes content = 2;
+}
+
+message PreviewImportRequest {
+  string file_name = 1;
+  // The .xlsx or .csv file, at most 5 MB (this RPC alone accepts messages up to 8 MB).
+  bytes content = 2;
+}
+
+message ImportProblem {
+  // Spreadsheet row (1 = headers); 0 = the file as a whole.
+  int32 row = 1;
+  string column = 2;
+  string message = 3;
+}
+
+message ImportSummary {
+  int32 units = 1;
+  int32 new_blocks = 2;
+  int32 new_people = 3;
+  int32 existing_people = 4;
+  int32 ownerships = 5;
+  int32 occupancies = 6;
+  int32 invitations = 7;
+  // The estate's PQ total after the import, e.g. "100.0000".
+  string quota_total_after = 8;
+  bool quota_complete = 9;
+}
+
+message ImportPreviewUnit {
+  int32 section = 1;
+  string door = 2;
+  string block = 3;
+  string quota = 4;
+  string owners = 5;
+  string occupants = 6;
+}
+
+message ImportProgress {
+  int32 done = 1;
+  int32 total = 2;
+  string message = 3;
+}
+
+message ImportInvites {
+  int32 pending = 1;
+  int32 sent = 2;
+  int32 linked = 3;
+  int32 failed = 4;
+  // When the next batch goes out at the latest (only while some are pending).
+  google.protobuf.Timestamp next_batch_by = 5;
+  repeated string failures = 6;
+}
+
+message ImportBatch {
+  string id = 1;
+  string file_name = 2;
+  // ready, invalid, queued, running, done, failed, discarded.
+  string status = 3;
+  int32 row_count = 4;
+  google.protobuf.Timestamp created_at = 5;
+  ImportSummary summary = 6;
+  repeated ImportProblem problems = 7;
+  // Problems beyond the first 500 (not listed).
+  int32 more_problems = 8;
+  // The first 50 units as they'll be created.
+  repeated ImportPreviewUnit preview = 9;
+  ImportProgress progress = 10;
+  string message = 11;
+  bool send_invitations = 12;
+  ImportInvites invites = 13;
+  google.protobuf.Timestamp finished_at = 14;
+}
+
+message CommitImportRequest {
+  string import_id = 1;
+  bool send_invitations = 2;
+}
+
+message GetImportRequest {
+  string import_id = 1;
+}
+
+message ListImportsRequest {}
+
+message ListImportsResponse {
+  repeated ImportBatch items = 1;
+}
+
+message DiscardImportRequest {
+  string import_id = 1;
+}
+
+message DiscardImportResponse {}
+
+message WatchImportRequest {
+  string import_id = 1;
+}
+
+message ImportStreamEvent {
+  oneof event {
+    ImportBatch batch = 1;
+    estatehub.streaming.v1.StreamHeartbeat heartbeat = 2;
+  }
+}
+
+service ImportService {
+  rpc GetImportTemplate(GetImportTemplateRequest) returns (ImportTemplate);
+  rpc PreviewImport(PreviewImportRequest) returns (ImportBatch);
+  // Needs a recent MFA: it creates many records and sends invitations.
+  rpc CommitImport(CommitImportRequest) returns (ImportBatch);
+  rpc GetImport(GetImportRequest) returns (ImportBatch);
+  rpc ListImports(ListImportsRequest) returns (ListImportsResponse);
+  rpc DiscardImport(DiscardImportRequest) returns (DiscardImportResponse);
+  // Progress while queued or running; ends once the import is done or failed.
+  rpc WatchImport(WatchImportRequest) returns (stream ImportStreamEvent);
+}

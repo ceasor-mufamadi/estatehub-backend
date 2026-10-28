@@ -112,13 +112,24 @@ public sealed class RecentMfaInterceptor : PreCallCheckInterceptor
     /// <summary>Trailer the web app looks for to prompt for MFA and retry.</summary>
     public const string StepUpTrailer = "estatehub-step-up";
 
+    /// <summary>Trailer value when only a fresh sign-in helps (residents: no authenticator to step up with).</summary>
+    public const string SignInAgain = "sign-in";
+
     protected override Task CheckAsync(object request, ServerCallContext context)
     {
-        if (Metadata(context)?.GetMetadata<RequiresRecentMfaAttribute>() is null)
-            return Task.CompletedTask;
-
+        var metadata = Metadata(context);
         var user = Service<ICurrentUser>(context);
         var now = Service<TimeProvider>(context).GetUtcNow();
+
+        if (metadata?.GetMetadata<RequiresRecentSignInAttribute>() is not null
+            && !(user.AuthTime is { } signedIn && now - signedIn <= RequiresRecentSignInAttribute.MaxAge))
+            throw new RpcException(
+                new Status(StatusCode.PermissionDenied, "For your security, sign in again to do this."),
+                new Metadata { { StepUpTrailer, SignInAgain } });
+
+        if (metadata?.GetMetadata<RequiresRecentMfaAttribute>() is null)
+            return Task.CompletedTask;
+
         var recent = user.AuthMethods.Contains(TokenClaims.MfaMethod)
                      && user.AuthTime is { } at
                      && now - at <= RequiresRecentMfaAttribute.MaxAge;

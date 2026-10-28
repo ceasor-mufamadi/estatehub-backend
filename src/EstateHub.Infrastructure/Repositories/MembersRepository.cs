@@ -16,15 +16,19 @@ public class MembersRepository : IMembersRepository
         _db = db;
     }
 
+    // Joined into an anonymous pair (which EF can sort and translate), then wrapped in MemberRow.
     public async Task<IReadOnlyList<MemberRow>> ListMembersAsync(CancellationToken ct = default) =>
-        await _db.Memberships.Where(m => m.IsActive)
-            .Join(_db.Users, m => m.UserId, u => u.Id, (m, u) => new MemberRow(m, u))
+        (await _db.Memberships.Where(m => m.IsActive)
+            .Join(_db.Users, m => m.UserId, u => u.Id, (m, u) => new { Membership = m, User = u })
             .OrderBy(r => r.User.DisplayName)
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+        .Select(r => new MemberRow(r.Membership, r.User))
+        .ToList();
 
     public async Task<MemberRow?> GetMemberAsync(Guid membershipId, CancellationToken ct = default) =>
         await _db.Memberships.Where(m => m.Id == membershipId && m.IsActive)
-            .Join(_db.Users, m => m.UserId, u => u.Id, (m, u) => new MemberRow(m, u))
+            .Join(_db.Users, m => m.UserId, u => u.Id, (m, u) => new { Membership = m, User = u })
+            .Select(r => new MemberRow(r.Membership, r.User))
             .FirstOrDefaultAsync(ct);
 
     public Task<Membership?> FindMembershipAsync(Guid userId, CancellationToken ct = default) =>
@@ -44,6 +48,9 @@ public class MembersRepository : IMembersRepository
 
     public Task<int> CountInvitationsSentSinceAsync(DateTime since, CancellationToken ct = default) =>
         _db.Invitations.CountAsync(i => i.LastSentAt >= since, ct);
+
+    public async Task<IReadOnlyList<Invitation>> InvitationsForPersonAsync(Guid personId, CancellationToken ct = default) =>
+        await _db.Invitations.Where(i => i.PersonId == personId).OrderBy(i => i.CreatedAt).ToListAsync(ct);
 
     public void Add(Invitation invitation) => _db.Invitations.Add(invitation);
 

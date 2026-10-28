@@ -34,6 +34,26 @@ public static class AuthScopes
     }
 
     /// <summary>
+    /// <see cref="RoleFor"/> for a whole session: during support access (AUTH-13) the session's
+    /// impersonated estate gives the read-only support role, while the super admin is still a super
+    /// admin with MFA and the 30 minutes haven't run out. Otherwise the usual rule.
+    /// </summary>
+    public static string? RoleForSession(
+        User user, AuthSession session, Guid? estateId, IReadOnlyList<UserMembership> memberships, DateTime now)
+    {
+        var methods = ParseMethods(session.AuthMethods);
+        if (session.ImpersonationEstateId is { } impersonated && estateId == impersonated)
+        {
+            var allowed = user is { IsSuperAdmin: true, Status: UserStatus.Active }
+                          && methods.Contains(TokenClaims.MfaMethod)
+                          && session.ImpersonationEndsAt > now;
+            return allowed ? Roles.Support : null;
+        }
+
+        return RoleFor(user, methods, estateId, memberships);
+    }
+
+    /// <summary>
     /// Where a fresh sign-in lands: platform level for super admins and for users with several (or no)
     /// estates (they pick one), straight into the estate when there is exactly one.
     /// </summary>

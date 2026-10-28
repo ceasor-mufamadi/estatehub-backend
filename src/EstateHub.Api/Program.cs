@@ -8,6 +8,7 @@ using EstateHub.Application;
 using EstateHub.Application.Cron;
 using EstateHub.Infrastructure;
 using EstateHub.Infrastructure.Cron;
+using EstateHub.Infrastructure.Imports;
 using Grpc.AspNetCore.Web;
 using Microsoft.AspNetCore.Http.Timeouts;
 
@@ -57,6 +58,7 @@ else
     builder.Services.Configure<AuthCookieOptions>(builder.Configuration.GetSection(AuthCookieOptions.SectionName));
     builder.Services.Configure<ReverseProxyOptions>(builder.Configuration.GetSection(ReverseProxyOptions.SectionName));
     builder.Services.AddSingleton<ClientIpResolver>();
+    builder.Services.AddSingleton<SignInResponses>();
     builder.Services.AddEstateHubRateLimits(builder.Configuration);
 
     // Every call gets 30 s; streams opt out with [DisableRequestTimeout] (SECURITY.md layer 6).
@@ -74,7 +76,10 @@ else
         o.Interceptors.Add<FeatureInterceptor>();
         o.Interceptors.Add<RecentMfaInterceptor>();
         o.Interceptors.Add<OwnershipInterceptor>();
-    });
+    })
+    // Only the import upload carries a file: up to 8 MB, so a 5 MB spreadsheet always fits (decided 2026-10-28).
+    .AddServiceOptions<ImportGrpcService>(o => o.MaxReceiveMessageSize = 8 * 1024 * 1024);
+    builder.Services.AddHostedService<ImportWorker>();
     builder.Services.AddGrpcReflection();
 
     // Browsers call EstateHub with gRPC-Web on the HTTP/1.1 "Http" endpoint; native gRPC clients use the
@@ -86,7 +91,7 @@ else
         .WithMethods("POST", "OPTIONS")
         .AllowCredentials()
         .WithExposedHeaders("Grpc-Status", "Grpc-Message", "Grpc-Encoding", "Grpc-Accept-Encoding", "Grpc-Status-Details-Bin",
-            RecentMfaInterceptor.StepUpTrailer)));
+            RecentMfaInterceptor.StepUpTrailer, SignInResponses.ChallengeTrailer)));
 }
 
 var app = builder.Build();
@@ -97,6 +102,12 @@ StartupChecks.Run(app);
 if (args is [CreateSuperAdminCommand.Name, ..])
 {
     await CreateSuperAdminCommand.RunAsync(app.Services);
+    return;
+}
+
+if (args is [RotateSigningKeysCommand.Name, ..])
+{
+    await RotateSigningKeysCommand.RunAsync(app.Services);
     return;
 }
 
@@ -116,6 +127,9 @@ if (runMode != "jobs")
     app.MapGrpcService<EstateGrpcService>();
     app.MapGrpcService<AuditLogGrpcService>();
     app.MapGrpcService<MembersGrpcService>();
+    app.MapGrpcService<GuardDeviceGrpcService>();
+    app.MapGrpcService<PeopleGrpcService>();
+    app.MapGrpcService<ImportGrpcService>();
 
     if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Docker")
     {

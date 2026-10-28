@@ -12,6 +12,9 @@ public static class Permissions
 
     public const string PlatformEstatesManage = "platform.estates.manage";
 
+    /// <summary>Read-only support access to one estate (AUTH-13).</summary>
+    public const string PlatformImpersonate = "platform.impersonate";
+
     public const string AuditLogRead = "estatehub.audit_log.read";
 
     public const string EstateRead = "estatehub.estate.read";
@@ -21,6 +24,16 @@ public static class Permissions
 
     /// <summary>Invite, change roles, remove. Which roles may be granted is narrowed by RoleGrants.</summary>
     public const string MembersManage = "estatehub.members.manage";
+
+    /// <summary>The estate's people (owners, tenants) and who owns or occupies which unit. Personal information.</summary>
+    public const string PeopleRead = "estatehub.people.read";
+    public const string PeopleWrite = "estatehub.people.write";
+
+    /// <summary>Import units, owners and tenants from a spreadsheet, and send their invitations (slice 3.3).</summary>
+    public const string ImportsRun = "estatehub.imports.run";
+
+    /// <summary>Pair and revoke guard tablets (AUTH-14).</summary>
+    public const string DevicesManage = "estatehub.devices.manage";
 }
 
 public static class Roles
@@ -33,6 +46,9 @@ public static class Roles
     public const string Tenant = "tenant";
     public const string Guard = "guard";
     public const string Contractor = "contractor";
+
+    /// <summary>A super admin's read-only support access to one estate (AUTH-13). Never granted: only StartImpersonation gives it.</summary>
+    public const string Support = "support";
 
     /// <summary>Signed in but not acting in any estate (estate picker only): no permissions.</summary>
     public const string None = "";
@@ -52,14 +68,19 @@ public static class RolePermissions
 {
     private static readonly Dictionary<string, string[]> Map = new(StringComparer.Ordinal)
     {
-        [Roles.SuperAdmin] = [Permissions.Unrestricted, Permissions.PlatformEstatesManage],
-        [Roles.ManagingAgent] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite, Permissions.MembersRead, Permissions.MembersManage],
-        [Roles.Manager] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite, Permissions.MembersRead, Permissions.MembersManage],
-        [Roles.Trustee] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.MembersRead],
-        [Roles.Owner] = [Permissions.EstateRead],
-        [Roles.Tenant] = [Permissions.EstateRead],
+        [Roles.SuperAdmin] = [Permissions.Unrestricted, Permissions.PlatformEstatesManage, Permissions.PlatformImpersonate],
+        [Roles.ManagingAgent] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite, Permissions.MembersRead, Permissions.MembersManage, Permissions.DevicesManage, Permissions.PeopleRead, Permissions.PeopleWrite, Permissions.ImportsRun],
+        [Roles.Manager] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite, Permissions.MembersRead, Permissions.MembersManage, Permissions.DevicesManage, Permissions.PeopleRead, Permissions.PeopleWrite, Permissions.ImportsRun],
+        [Roles.Trustee] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.MembersRead, Permissions.PeopleRead],
+        // Residents see only their own units (ResourceKind.Unit checks, Sprint 3), never the estate's
+        // unit list, other units or the activity log: privacy between neighbours (POPIA).
+        [Roles.Owner] = [],
+        [Roles.Tenant] = [],
+        // Guards need unit numbers and blocks at the gate (is there a unit 12?), never owners' details.
         [Roles.Guard] = [Permissions.EstateRead],
         [Roles.Contractor] = [],
+        // Read-only: the same reads as a trustee, nothing that writes (AUTH-13 "read-only by default").
+        [Roles.Support] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.MembersRead, Permissions.PeopleRead],
     };
 
     public static IReadOnlyCollection<string> AllRoles => Map.Keys;

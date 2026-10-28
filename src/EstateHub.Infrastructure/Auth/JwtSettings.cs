@@ -12,9 +12,9 @@ public sealed class JwtSettings
     public int AccessTokenMinutes { get; set; } = 15;
 
     /// <summary>
-    /// PEM-encoded EC P-256 private key ("-----BEGIN PRIVATE KEY-----"). Supply it through an
-    /// environment variable or user secrets, never appsettings. Required outside Development/Testing.
-    /// Rotation via a SigningKey table + SigningKeyRotationJob lands in Sprint 2.
+    /// Optional, one-off: an existing PEM EC P-256 key to import as the FIRST signing key when the
+    /// signing_keys table is empty. Normally leave it unset: the first key is generated, stored
+    /// encrypted, and rotated by ⏰ SigningKeyRotationJob (SigningKeyRing).
     /// </summary>
     public string? SigningKeyPem { get; set; }
 }

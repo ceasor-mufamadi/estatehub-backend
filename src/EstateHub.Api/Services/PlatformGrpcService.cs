@@ -50,6 +50,13 @@ public class PlatformGrpcService : PlatformService.PlatformServiceBase
         return new InviteToEstateResponse { InvitationId = invitation.Id.ToString() };
     }
 
+    [RequiresRecentMfa]
+    public override async Task<ResetUserMfaResponse> ResetUserMfa(ResetUserMfaRequest request, ServerCallContext context)
+    {
+        await _members.ResetAccountMfaAsync(request.Email, context.CancellationToken);
+        return new ResetUserMfaResponse();
+    }
+
     private static EstateEntry ToEntry(EstateDto dto)
     {
         var entry = new EstateEntry { Id = dto.Id.ToString(), Name = dto.Name, SchemeType = dto.SchemeType };

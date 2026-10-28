@@ -1,15 +1,19 @@
 using EstateHub.Application.Auth;
+using EstateHub.Application.Imports;
 using EstateHub.Application.Interfaces;
 using EstateHub.Application.Streaming;
 using EstateHub.Application.Tenancy;
 using EstateHub.Infrastructure.Auth;
 using EstateHub.Infrastructure.Cron;
 using EstateHub.Infrastructure.Data;
+using EstateHub.Infrastructure.Imports;
 using EstateHub.Infrastructure.Messaging;
 using EstateHub.Infrastructure.Repositories;
 using EstateHub.Infrastructure.Streaming;
 using EstateHub.Infrastructure.Tenancy;
+using EstateHub.Domain.Entities;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,10 +38,11 @@ public static class DependencyInjection
             .UseSnakeCaseNamingConvention()
             .AddInterceptors(sp.GetRequiredService<TenantConnectionInterceptor>()));
 
-        // Tokens (ES256). Validation is wired in the API's AuthorizationSetup.
+        // Tokens (ES256), keys in the database (encrypted). Validation is wired in the API's AuthorizationSetup.
         services.TryAddSingleton(TimeProvider.System);
         services.Configure<JwtSettings>(configuration.GetSection(JwtSettings.SectionName));
-        services.AddSingleton<SigningKeyStore>();
+        services.AddSingleton<SigningKeyRing>();
+        services.AddScoped<SigningKeyRotation>();
         services.AddSingleton<ITokenService, TokenService>();
         services.AddScoped<IResourceAccess, ResourceAccess>();
 
@@ -56,6 +61,7 @@ public static class DependencyInjection
         });
         services.AddSingleton<IPasswordHashing, PasswordHashing>();
         services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
+        services.AddSingleton<EstateHub.Application.Privacy.IIdNumberProtector, IdNumberProtector>();
         services.AddSingleton<IBreachedPasswords, PwnedPasswordsChecker>();
         services.AddScoped<IAuthRepository, AuthRepository>();
         services.AddScoped<IMembershipDirectory, MembershipDirectory>();
@@ -70,6 +76,34 @@ public static class DependencyInjection
         services.AddHttpClient(ConfiguredSmsSender.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
         services.AddSingleton<IAppLinks, AppLinks>();
 
+        // Guard tablets and security alerts (slice 2.4).
+        services.AddScoped<IDeviceDirectory, DeviceDirectory>();
+        services.AddScoped<IGuardDeviceRepository, GuardDeviceRepository>();
+        services.Configure<AlertOptions>(configuration.GetSection(AlertOptions.SectionName));
+        services.AddSingleton<IAlerts, AlertSender>();
+        services.AddHttpClient(AlertSender.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(5));
+
+        // Passkeys (slice 2.5): ASP.NET Core Identity's WebAuthn handler over our own user store.
+        // The relying party is the web app's domain and its exact origins (Passkeys section), not the
+        // API's, because the browser talks WebAuthn with the web app.
+        services.AddHttpContextAccessor();
+        services.AddIdentityCore<User>();
+        services.AddScoped<IUserStore<User>, EstateHubUserStore>();
+        services.AddScoped<IPasskeyHandler<User>, PasskeyHandler<User>>();
+        var passkeys = configuration.GetSection(PasskeySettings.SectionName).Get<PasskeySettings>() ?? new PasskeySettings();
+        services.Configure<IdentityPasskeyOptions>(options =>
+        {
+            options.ServerDomain = passkeys.ServerDomain;
+            options.ValidateOrigin = context => ValueTask.FromResult(!context.CrossOrigin && passkeys.Origins.Contains(context.Origin));
+        });
+        services.AddScoped<IPasskeys, Passkeys>();
+
+        // Human check after repeated failures (AUTH-05).
+        services.Configure<TurnstileOptions>(configuration.GetSection(TurnstileOptions.SectionName));
+        services.AddSingleton<IHumanCheck, TurnstileHumanCheck>();
+        services.AddSingleton<ISignInFailures, SignInFailures>();
+        services.AddHttpClient(TurnstileHumanCheck.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(5));
+
         // Live-update publish/subscribe for server-streaming RPCs (in-memory: single API instance).
         services.AddSingleton(typeof(IEventBroadcaster<>), typeof(InMemoryEventBroadcaster<>));
 
@@ -79,6 +113,16 @@ public static class DependencyInjection
         services.AddScoped<IEstateRepository, EstateRepository>();
         services.AddScoped<IFeatureRepository, FeatureRepository>();
         services.AddScoped<IBlockRepository, BlockRepository>();
+        services.AddScoped<IUnitRepository, UnitRepository>();
+        services.AddScoped<IPeopleRepository, PeopleRepository>();
+
+        // Spreadsheet import (slice 3.3): the worker that runs commits is hosted by the API only (Program.cs).
+        services.AddScoped<IImportRepository, ImportRepository>();
+        services.AddSingleton<IImportFileReader, SpreadsheetReader>();
+        services.AddSingleton<IImportTemplate, ImportTemplate>();
+        services.AddSingleton<ImportQueue>();
+        services.AddSingleton<IImportQueue>(sp => sp.GetRequiredService<ImportQueue>());
+        services.AddSingleton<IImportProgress, ImportProgress>();
 
         return services;
     }

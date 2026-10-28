@@ -156,4 +156,6 @@ public sealed class AppLinks : IAppLinks
     }
 
     public string Invitation(string token) => $"{_options.WebBaseUrl.TrimEnd('/')}/invite#{token}";
+
+    public string SecureAccount(string token) => $"{_options.WebBaseUrl.TrimEnd('/')}/secure-account#{token}";
 }

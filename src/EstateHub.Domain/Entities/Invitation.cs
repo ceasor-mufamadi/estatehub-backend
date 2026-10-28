@@ -17,6 +17,9 @@ public class Invitation : ITenantScoped, IHasTimestamps
     public string TokenHash { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
 
+    /// <summary>The estate's person record this invitation is for; accepting links it to the account.</summary>
+    public Guid? PersonId { get; set; }
+
     public Guid InvitedByUserId { get; set; }
     public int SendCount { get; set; }
     public DateTime LastSentAt { get; set; }
@@ -57,6 +60,9 @@ public class OtpChallenge : IHasTimestamps
     /// <summary>SHA-256 of challenge id + code (the id salts it).</summary>
     public string CodeHash { get; set; } = string.Empty;
 
+    /// <summary>Contact changes: the new email or mobile, applied once its code is confirmed.</summary>
+    public string? NewContact { get; set; }
+
     public int Attempts { get; set; }
     public DateTime ExpiresAt { get; set; }
     public DateTime? ConsumedAt { get; set; }
@@ -70,6 +76,10 @@ public static class OtpPurpose
 {
     public const string SignIn = "sign_in";
     public const string Invitation = "invitation";
+    public const string PasswordReset = "reset";
+
+    /// <summary>Confirms a new email/mobile for the signed-in user (code sent to the new address).</summary>
+    public const string ContactChange = "contact_change";
 }
 
 public static class OtpChannel

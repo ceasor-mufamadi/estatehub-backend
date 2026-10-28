@@ -84,15 +84,20 @@ public class AuthFlowTests : IClassFixture<EstateHubApiFactory>
     private static async Task<(T Response, string? Cookie)> WithCookieAsync<T>(AsyncUnaryCall<T> call)
     {
         var response = await call.ResponseAsync;
-        var setCookie = (await call.ResponseHeadersAsync).GetValue("set-cookie");
+        var setCookie = RefreshCookie(await call.ResponseHeadersAsync);
         return (response, setCookie?.Split(';')[0].Split('=', 2)[1]);
     }
 
     private static async Task<string?> SetCookieHeaderAsync<T>(AsyncUnaryCall<T> call)
     {
         await call.ResponseAsync;
-        return (await call.ResponseHeadersAsync).GetValue("set-cookie");
+        return RefreshCookie(await call.ResponseHeadersAsync);
     }
+
+    // Sign-ins also set the device-id cookie; these tests are about the session (refresh) cookie.
+    private static string? RefreshCookie(Metadata headers) =>
+        headers.Where(h => h.Key == "set-cookie").Select(h => h.Value)
+            .FirstOrDefault(v => v.StartsWith(AuthCookieOptions.Name + "=", StringComparison.Ordinal));
 
     private static Metadata Cookie(string value) => new() { { "cookie", $"{AuthCookieOptions.Name}={value}" } };
 

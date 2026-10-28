@@ -5,7 +5,7 @@ namespace EstateHub.Api.Security;
 
 /// <summary>
 /// Settings that are only allowed to be missing or relaxed in Development/Testing. Anywhere else the
-/// API refuses to start rather than run insecurely (the JWT signing key is checked by SigningKeyStore).
+/// API refuses to start rather than run insecurely.
 /// </summary>
 public static class StartupChecks
 {

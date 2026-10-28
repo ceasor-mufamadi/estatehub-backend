@@ -138,7 +138,7 @@ namespace EstateHub.Infrastructure.Cron
                     _logger.LogInformation(
                         "Next run for {job}: {nextRun}",
                         schedule.Name,
-                        schedule.NextRun);
+                        Local(schedule.NextRun, schedule.TimeZoneInfo));
                 }
             }
         }
@@ -208,9 +208,13 @@ namespace EstateHub.Infrastructure.Cron
                     attribute.Name,
                     config.Cron,
                     timezone.DisplayName,
-                    nextRun);
+                    Local(nextRun, timezone));
             }
         }
+
+        // Schedules are kept in UTC; logs show them in the schedule's own time zone (SAST), as named.
+        private static string Local(DateTime? utc, TimeZoneInfo zone) =>
+            utc is { } value ? TimeZoneInfo.ConvertTimeFromUtc(value, zone).ToString("yyyy-MM-dd HH:mm") : "never";
 
         private TimeZoneInfo ResolveTimeZone(string timezone)
         {

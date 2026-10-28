@@ -2,6 +2,7 @@ using EstateHub.Application.Auth;
 using EstateHub.Infrastructure.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -18,7 +19,7 @@ public static class AuthorizationSetup
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-            .Configure<SigningKeyStore, IOptions<JwtSettings>, TimeProvider>((options, keys, jwt, clock) =>
+            .Configure<SigningKeyRing, IOptions<JwtSettings>, TimeProvider>((options, keys, jwt, clock) =>
             {
                 var skew = TimeSpan.FromSeconds(30);
                 options.MapInboundClaims = false; // keep our claim names: sub, estate_id, role, perm, amr, auth_time
@@ -30,7 +31,8 @@ public static class AuthorizationSetup
                     ValidateIssuerSigningKey = true,
                     ValidIssuer = jwt.Value.Issuer,
                     ValidAudience = jwt.Value.Audience,
-                    IssuerSigningKey = keys.ValidationKey,
+                    // All live keys: during a rotation tokens signed by either one are valid.
+                    IssuerSigningKeyResolver = (_, _, _, _) => keys.ValidationKeys,
                     ValidAlgorithms = [SecurityAlgorithms.EcdsaSha256],
                     NameClaimType = TokenClaims.Subject,
                     RoleClaimType = TokenClaims.Role,
@@ -50,7 +52,10 @@ public static class AuthorizationSetup
         services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
         services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
         services.AddHttpContextAccessor();
-        services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+        // The request's caller, unless background work in this scope acts for someone (CallerOverride).
+        services.RemoveAll<ICurrentUser>();
+        services.AddScoped<ICurrentUser>(sp =>
+            sp.GetRequiredService<CallerOverride>().User ?? new HttpContextCurrentUser(sp.GetRequiredService<IHttpContextAccessor>()));
         return services;
     }
 }

@@ -120,6 +120,23 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
+                    b.Property<Guid?>("GuardDeviceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("guard_device_id");
+
+                    b.Property<DateTime?>("ImpersonationEndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("impersonation_ends_at");
+
+                    b.Property<Guid?>("ImpersonationEstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("impersonation_estate_id");
+
+                    b.Property<string>("ImpersonationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("impersonation_reason");
+
                     b.Property<string>("IpAddress")
                         .HasMaxLength(45)
                         .HasColumnType("character varying(45)")
@@ -166,6 +183,9 @@ namespace EstateHub.Infrastructure.Data.Migrations
 
                     b.HasIndex("ActiveEstateId")
                         .HasDatabaseName("ix_auth_sessions_active_estate_id");
+
+                    b.HasIndex("GuardDeviceId")
+                        .HasDatabaseName("ix_auth_sessions_guard_device_id");
 
                     b.HasIndex("UserId", "RevokedAt")
                         .HasDatabaseName("ix_auth_sessions_user_id_revoked_at");
@@ -215,15 +235,35 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("address");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<string>("CsosRegistrationNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("csos_registration_number");
 
                     b.Property<string>("Currency")
                         .IsRequired()
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)")
                         .HasColumnName("currency");
+
+                    b.Property<string>("InformationOfficerEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("information_officer_email");
+
+                    b.Property<string>("InformationOfficerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("information_officer_name");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -234,6 +274,11 @@ namespace EstateHub.Infrastructure.Data.Migrations
                     b.Property<Guid?>("OrganisationId")
                         .HasColumnType("uuid")
                         .HasColumnName("organisation_id");
+
+                    b.Property<string>("SchemeNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("scheme_number");
 
                     b.Property<string>("SchemeType")
                         .IsRequired()
@@ -250,6 +295,14 @@ namespace EstateHub.Infrastructure.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<bool>("VisitorIdCapture")
+                        .HasColumnType("boolean")
+                        .HasColumnName("visitor_id_capture");
+
+                    b.Property<int>("VisitorRetentionDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("visitor_retention_days");
 
                     b.HasKey("Id")
                         .HasName("pk_estates");
@@ -309,6 +362,267 @@ namespace EstateHub.Infrastructure.Data.Migrations
                     b.ToTable("estate_features", (string)null);
                 });
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.GuardDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CredentialHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("credential_hash");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("label");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<Guid>("PairedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("paired_by_user_id");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_guard_devices");
+
+                    b.HasIndex("CredentialHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_guard_devices_credential_hash");
+
+                    b.HasIndex("EstateId")
+                        .HasDatabaseName("ix_guard_devices_estate_id");
+
+                    b.ToTable("guard_devices", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.GuardPin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<int>("FailedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("failed_count");
+
+                    b.Property<DateTime?>("LockoutEnd")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lockout_end");
+
+                    b.Property<string>("PinHash")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("pin_hash");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_guard_pins");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_guard_pins_user_id");
+
+                    b.HasIndex("EstateId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_guard_pins_estate_id_user_id");
+
+                    b.ToTable("guard_pins", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.ImportBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("CommittedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("committed_at");
+
+                    b.Property<string>("CommittedByRole")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("committed_by_role");
+
+                    b.Property<Guid?>("CommittedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("committed_by_user_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("file_name");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<DateTime?>("LastInviteBatchAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_invite_batch_at");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("ProblemsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("problems_json");
+
+                    b.Property<int>("RowCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("row_count");
+
+                    b.Property<string>("RowsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("rows_json");
+
+                    b.Property<bool>("SendInvitations")
+                        .HasColumnType("boolean")
+                        .HasColumnName("send_invitations");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("SummaryJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("summary_json");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_import_batches");
+
+                    b.HasIndex("EstateId", "CreatedAt")
+                        .HasDatabaseName("ix_import_batches_estate_id_created_at");
+
+                    b.HasIndex(new[] { "EstateId" }, "ux_import_batches_one_active")
+                        .IsUnique()
+                        .HasDatabaseName("ux_import_batches_one_active")
+                        .HasFilter("status IN ('queued', 'running')");
+
+                    b.ToTable("import_batches", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.ImportInvite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<Guid>("ImportBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("import_batch_id");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("message");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("person_id");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_import_invites");
+
+                    b.HasIndex("EstateId")
+                        .HasDatabaseName("ix_import_invites_estate_id");
+
+                    b.HasIndex("PersonId")
+                        .HasDatabaseName("ix_import_invites_person_id");
+
+                    b.HasIndex("ImportBatchId", "Status")
+                        .HasDatabaseName("ix_import_invites_import_batch_id_status");
+
+                    b.ToTable("import_invites", (string)null);
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.Invitation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -355,6 +669,10 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("name");
 
+                    b.Property<Guid?>("PersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("person_id");
+
                     b.Property<string>("Phone")
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)")
@@ -395,6 +713,51 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_invitations_estate_id_last_sent_at");
 
                     b.ToTable("invitations", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.KnownDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DeviceHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("device_hash");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("label");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_known_devices");
+
+                    b.HasIndex("UserId", "DeviceHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_known_devices_user_id_device_hash");
+
+                    b.ToTable("known_devices", (string)null);
                 });
 
             modelBuilder.Entity("EstateHub.Domain.Entities.Membership", b =>
@@ -520,6 +883,70 @@ namespace EstateHub.Infrastructure.Data.Migrations
                     b.ToTable("mfa_challenges", (string)null);
                 });
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.Occupancy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date")
+                        .HasColumnName("from_date");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("person_id");
+
+                    b.Property<DateOnly?>("ToDate")
+                        .HasColumnType("date")
+                        .HasColumnName("to_date");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("unit_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_occupancies");
+
+                    b.HasIndex("UnitId")
+                        .HasDatabaseName("ix_occupancies_unit_id");
+
+                    b.HasIndex("EstateId", "PersonId")
+                        .HasDatabaseName("ix_occupancies_estate_id_person_id");
+
+                    b.HasIndex("EstateId", "UnitId")
+                        .HasDatabaseName("ix_occupancies_estate_id_unit_id");
+
+                    b.HasIndex(new[] { "PersonId" }, "ix_occupancies_person_id")
+                        .HasDatabaseName("ix_occupancies_person_id");
+
+                    b.HasIndex(new[] { "PersonId" }, "ux_occupancies_one_open_home")
+                        .IsUnique()
+                        .HasDatabaseName("ux_occupancies_one_open_home")
+                        .HasFilter("to_date IS NULL");
+
+                    b.ToTable("occupancies", (string)null);
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.Organisation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -601,6 +1028,11 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasColumnType("character varying(45)")
                         .HasColumnName("ip_address");
 
+                    b.Property<string>("NewContact")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("new_contact");
+
                     b.Property<string>("Purpose")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -638,6 +1070,265 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_otp_challenges_ip_address_created_at");
 
                     b.ToTable("otp_challenges", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.Ownership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date")
+                        .HasColumnName("from_date");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("person_id");
+
+                    b.Property<decimal>("SharePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("share_percent");
+
+                    b.Property<DateOnly?>("ToDate")
+                        .HasColumnType("date")
+                        .HasColumnName("to_date");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("unit_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ownerships");
+
+                    b.HasIndex("PersonId")
+                        .HasDatabaseName("ix_ownerships_person_id");
+
+                    b.HasIndex("UnitId")
+                        .HasDatabaseName("ix_ownerships_unit_id");
+
+                    b.HasIndex("EstateId", "PersonId")
+                        .HasDatabaseName("ix_ownerships_estate_id_person_id");
+
+                    b.HasIndex("EstateId", "UnitId")
+                        .HasDatabaseName("ix_ownerships_estate_id_unit_id");
+
+                    b.ToTable("ownerships", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.PairingCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("device_id");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("label");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_pairing_codes");
+
+                    b.HasIndex("CodeHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_pairing_codes_code_hash");
+
+                    b.HasIndex("EstateId")
+                        .HasDatabaseName("ix_pairing_codes_estate_id");
+
+                    b.ToTable("pairing_codes", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.PasskeyChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("purpose");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)")
+                        .HasColumnName("state");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_passkey_challenges");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_passkey_challenges_expires_at");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_passkey_challenges_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_passkey_challenges_user_id");
+
+                    b.ToTable("passkey_challenges", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.Person", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("AnonymisedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("anonymised_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("email");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("NoticesByEmail")
+                        .HasColumnType("boolean")
+                        .HasColumnName("notices_by_email");
+
+                    b.Property<bool>("NoticesBySms")
+                        .HasColumnType("boolean")
+                        .HasColumnName("notices_by_sms");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("phone");
+
+                    b.Property<DateTime?>("PrivacyAcknowledgedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("privacy_acknowledged_at");
+
+                    b.Property<string>("PrivacyNoticeVersion")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("privacy_notice_version");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_people");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_people_user_id");
+
+                    b.HasIndex("EstateId", "Email")
+                        .IsUnique()
+                        .HasDatabaseName("ix_people_estate_id_email");
+
+                    b.HasIndex("EstateId", "Phone")
+                        .IsUnique()
+                        .HasDatabaseName("ix_people_estate_id_phone");
+
+                    b.HasIndex("EstateId", "UserId")
+                        .HasDatabaseName("ix_people_estate_id_user_id");
+
+                    b.ToTable("people", (string)null);
                 });
 
             modelBuilder.Entity("EstateHub.Domain.Entities.RecoveryCode", b =>
@@ -726,6 +1417,159 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_refresh_tokens_token_hash");
 
                     b.ToTable("refresh_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.SignInReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Device")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("device");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(45)
+                        .HasColumnType("character varying(45)")
+                        .HasColumnName("ip_address");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sign_in_reports");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sign_in_reports_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_sign_in_reports_user_id");
+
+                    b.ToTable("sign_in_reports", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.SigningKey", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("PrivateKeyEncrypted")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("private_key_encrypted");
+
+                    b.Property<string>("PublicKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("public_key");
+
+                    b.Property<DateTime?>("RetiredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("retired_at");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_signing_keys");
+
+                    b.ToTable("signing_keys", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.Unit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("BlockId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("block_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DoorNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("door_number");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<decimal>("ParticipationQuota")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("numeric(9,6)")
+                        .HasColumnName("participation_quota");
+
+                    b.Property<int>("SectionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("section_number");
+
+                    b.Property<decimal?>("SizeSquareMetres")
+                        .HasPrecision(8, 2)
+                        .HasColumnType("numeric(8,2)")
+                        .HasColumnName("size_square_metres");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_units");
+
+                    b.HasIndex("BlockId")
+                        .HasDatabaseName("ix_units_block_id");
+
+                    b.HasIndex("EstateId", "SectionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_units_estate_id_section_number");
+
+                    b.ToTable("units", (string)null);
                 });
 
             modelBuilder.Entity("EstateHub.Domain.Entities.User", b =>
@@ -819,6 +1663,90 @@ namespace EstateHub.Infrastructure.Data.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.UserPasskey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("AttestationObject")
+                        .HasColumnType("bytea")
+                        .HasColumnName("attestation_object");
+
+                    b.Property<byte[]>("ClientDataJson")
+                        .HasColumnType("bytea")
+                        .HasColumnName("client_data_json");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<byte[]>("CredentialId")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("bytea")
+                        .HasColumnName("credential_id");
+
+                    b.Property<bool>("IsBackedUp")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_backed_up");
+
+                    b.Property<bool>("IsBackupEligible")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_backup_eligible");
+
+                    b.Property<bool>("IsUserVerified")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_user_verified");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<byte[]>("PublicKey")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("bytea")
+                        .HasColumnName("public_key");
+
+                    b.Property<long>("SignCount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sign_count");
+
+                    b.Property<string>("Transports")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("transports");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_user_passkeys");
+
+                    b.HasIndex("CredentialId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_user_passkeys_credential_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_user_passkeys_user_id");
+
+                    b.ToTable("user_passkeys", (string)null);
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.AuthSession", b =>
                 {
                     b.HasOne("EstateHub.Domain.Entities.Estate", null)
@@ -864,6 +1792,67 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasConstraintName("fk_estate_features_estates_estate_id");
                 });
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.GuardDevice", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_guard_devices_estates_estate_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.GuardPin", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_guard_pins_estates_estate_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_guard_pins_users_user_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.ImportBatch", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_batches_estates_estate_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.ImportInvite", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_invites_estates_estate_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.ImportBatch", null)
+                        .WithMany()
+                        .HasForeignKey("ImportBatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_invites_import_batches_import_batch_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_import_invites_people_person_id");
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.Invitation", b =>
                 {
                     b.HasOne("EstateHub.Domain.Entities.Estate", null)
@@ -872,6 +1861,16 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_invitations_estates_estate_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.KnownDevice", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_known_devices_users_user_id");
                 });
 
             modelBuilder.Entity("EstateHub.Domain.Entities.Membership", b =>
@@ -901,6 +1900,30 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasConstraintName("fk_mfa_challenges_users_user_id");
                 });
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.Occupancy", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_occupancies_estates_estate_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_occupancies_people_person_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_occupancies_units_unit_id");
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.OtpChallenge", b =>
                 {
                     b.HasOne("EstateHub.Domain.Entities.User", null)
@@ -908,6 +1931,65 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .HasConstraintName("fk_otp_challenges_users_user_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.Ownership", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ownerships_estates_estate_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ownerships_people_person_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ownerships_units_unit_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.PairingCode", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_pairing_codes_estates_estate_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.PasskeyChallenge", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_passkey_challenges_users_user_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.Person", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_people_estates_estate_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_people_users_user_id");
                 });
 
             modelBuilder.Entity("EstateHub.Domain.Entities.RecoveryCode", b =>
@@ -928,6 +2010,42 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_refresh_tokens_auth_sessions_session_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.SignInReport", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sign_in_reports_users_user_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.Unit", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Block", null)
+                        .WithMany()
+                        .HasForeignKey("BlockId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_units_blocks_block_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_units_estates_estate_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.UserPasskey", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_passkeys_users_user_id");
                 });
 #pragma warning restore 612, 618
         }

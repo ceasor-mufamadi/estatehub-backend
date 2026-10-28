@@ -34,6 +34,12 @@ public class EstateHubDbContext : DbContext
     public DbSet<EstateFeature> EstateFeatures => Set<EstateFeature>();
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<Block> Blocks => Set<Block>();
+    public DbSet<Unit> Units => Set<Unit>();
+    public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
+    public DbSet<ImportInvite> ImportInvites => Set<ImportInvite>();
+    public DbSet<Person> People => Set<Person>();
+    public DbSet<Ownership> Ownerships => Set<Ownership>();
+    public DbSet<Occupancy> Occupancies => Set<Occupancy>();
     public DbSet<User> Users => Set<User>();
     public DbSet<AuthSession> AuthSessions => Set<AuthSession>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
@@ -41,6 +47,14 @@ public class EstateHubDbContext : DbContext
     public DbSet<MfaChallenge> MfaChallenges => Set<MfaChallenge>();
     public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
+    public DbSet<SigningKey> SigningKeys => Set<SigningKey>();
+    public DbSet<GuardDevice> GuardDevices => Set<GuardDevice>();
+    public DbSet<PairingCode> PairingCodes => Set<PairingCode>();
+    public DbSet<GuardPin> GuardPins => Set<GuardPin>();
+    public DbSet<UserPasskey> UserPasskeys => Set<UserPasskey>();
+    public DbSet<PasskeyChallenge> PasskeyChallenges => Set<PasskeyChallenge>();
+    public DbSet<KnownDevice> KnownDevices => Set<KnownDevice>();
+    public DbSet<SignInReport> SignInReports => Set<SignInReport>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

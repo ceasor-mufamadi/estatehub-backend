@@ -51,7 +51,7 @@ public sealed class SessionValidator : ISessionValidator
             return false;
 
         var memberships = await _directory.ForUserAsync(userId, ct);
-        return AuthScopes.RoleFor(user, AuthScopes.ParseMethods(session.AuthMethods), estateId, memberships) == role;
+        return AuthScopes.RoleForSession(user, session, estateId, memberships, _clock.GetUtcNow().UtcDateTime) == role;
     }
 
     private static string Key(Guid sessionId) => $"auth:session:{sessionId}";

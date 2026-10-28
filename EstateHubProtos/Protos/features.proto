@@ -13,6 +13,8 @@ message GetMyContextResponse {
   repeated string permissions = 5;
   // Effective feature keys for the active estate (defaults + overrides, dependencies applied).
   repeated string enabled_features = 6;
+  // This session signed in with an authenticator app (so recovery codes etc. apply).
+  bool mfa = 7;
 }
 
 service FeaturesService {

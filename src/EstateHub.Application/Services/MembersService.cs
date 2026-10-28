@@ -26,6 +26,8 @@ public class MembersService : IMembersService
     private readonly ISmsSender _sms;
     private readonly IAppLinks _links;
     private readonly IAuditLogService _audit;
+    private readonly IAuthService _auth;
+    private readonly IAlerts _alerts;
     private readonly TimeProvider _clock;
 
     public MembersService(
@@ -38,6 +40,8 @@ public class MembersService : IMembersService
         ISmsSender sms,
         IAppLinks links,
         IAuditLogService audit,
+        IAuthService auth,
+        IAlerts alerts,
         TimeProvider clock)
     {
         _members = members;
@@ -49,10 +53,33 @@ public class MembersService : IMembersService
         _sms = sms;
         _links = links;
         _audit = audit;
+        _auth = auth;
+        _alerts = alerts;
         _clock = clock;
     }
 
     private DateTime Now => _clock.GetUtcNow().UtcDateTime;
+
+    public async Task ResetMfaAsync(Guid membershipId, CancellationToken ct = default)
+    {
+        var row = await OwnedMemberAsync(membershipId, ct);
+        if (!row.User.MfaEnabled)
+            throw new ArgumentException($"{row.User.DisplayName} has no authenticator set up.");
+
+        await _auth.ResetMfaAsync(row.User.Id, _user.UserId!, ct);
+        await AuditAsync("Membership", row.Membership.Id, "MfaReset", $"user={row.User.Id}", ct);
+    }
+
+    public async Task ResetAccountMfaAsync(string email, CancellationToken ct = default)
+    {
+        var user = await _users.FindUserByEmailAsync(ContactPoints.Email(email), ct) ?? throw new KeyNotFoundException("No account uses that email.");
+        if (user.Id == ActorId)
+            throw new ActionNotAllowedException("You can't reset your own authenticator. Ask another super admin, or use a recovery code.");
+        if (!user.MfaEnabled)
+            throw new ArgumentException("That account has no authenticator set up.");
+
+        await _auth.ResetMfaAsync(user.Id, _user.UserId!, ct);
+    }
 
     private Guid ActorId => Guid.Parse(_user.UserId ?? throw new InvalidOperationException("No caller."));
 
@@ -126,6 +153,8 @@ public class MembersService : IMembersService
         // The member's current token now names the old role, so their next call fails the session check
         // and the app refreshes into the new role (within ~30 s, SECURITY.md layer 4).
         await AuditAsync("Membership", row.Membership.Id, "RoleChanged", $"user={row.User.Id} from={previous} to={role}", ct);
+        if (Roles.IsStaff(role) && !Roles.IsStaff(previous))
+            await _alerts.RaiseAsync("New staff member", $"{ContactPoints.Mask(row.User.Contact)} was made {role}.", ct);
         return ToDto(row, canManage: true);
     }
 
@@ -177,6 +206,7 @@ public class MembersService : IMembersService
             TokenHash = AuthSecrets.Hash(token),
             ExpiresAt = Now + InvitationLifetime,
             InvitedByUserId = ActorId,
+            PersonId = request.PersonId,
             SendCount = 1,
             LastSentAt = Now,
         };
@@ -184,9 +214,12 @@ public class MembersService : IMembersService
         await _members.SaveChangesAsync(ct);
 
         await SendAsync(invitation, token, ct);
-        await AuditAsync("Invitation", invitation.Id, "Invited", $"role={role} to={ContactPoints.Mask(email ?? phone!)}", ct);
+        await AuditAsync("Invitation", invitation.Id, "Invited", $"role={role} by={(email is not null ? "email" : "sms")} person={request.PersonId}", ct); // ids only (POPIA)
         return ToDto(invitation);
     }
+
+    public async Task<int> InvitationAllowanceAsync(CancellationToken ct = default) =>
+        Math.Max(0, MaxInvitationsPerEstatePerHour - await _members.CountInvitationsSentSinceAsync(Now.AddHours(-1), ct));
 
     private async Task SendAsync(Invitation invitation, string token, CancellationToken ct)
     {
@@ -238,7 +271,8 @@ public class MembersService : IMembersService
         _audit.CreateAsync(new CreateAuditLogDto(entityType, entityId.ToString(), action, _user.UserId!, details), ct);
 
     private static MemberDto ToDto(MemberRow row, bool canManage) => new(
-        row.Membership.Id, row.User.Id, row.User.DisplayName, row.User.Email, row.User.Phone, row.Membership.Role, row.Membership.CreatedAt, canManage);
+        row.Membership.Id, row.User.Id, row.User.DisplayName, row.User.Email, row.User.Phone, row.Membership.Role, row.Membership.CreatedAt, canManage,
+        row.User.MfaEnabled);
 
     private static InvitationDto ToDto(Invitation i) => new(i.Id, i.Name, i.Email, i.Phone, i.Role, i.ExpiresAt, i.LastSentAt, i.SendCount);
 }
