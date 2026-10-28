@@ -22,6 +22,9 @@ public interface IEstateRepository
     Task<Estate?> GetAsync(Guid id, CancellationToken ct = default);
 
     Task<IReadOnlyList<Estate>> ListAsync(CancellationToken ct = default);
+
+    /// <summary>Case-insensitive: "Riverside" and "riverside " are the same name.</summary>
+    Task<bool> NameExistsAsync(string name, CancellationToken ct = default);
 }
 
 public interface IFeatureService

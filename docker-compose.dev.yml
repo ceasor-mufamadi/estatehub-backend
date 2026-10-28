@@ -49,10 +49,12 @@ services:
     volumes:
       - .:/src
       - nuget_cache:/root/.nuget/packages
+      - dataprotection_keys:/keys
     environment:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_NOLOGO: "1"
       TZ: Africa/Johannesburg
+      DataProtection__KeysPath: /keys
       ConnectionStrings__Migrator: Host=postgres;Database=estatehub_dev;Username=estatehub_migrator;Password=${ESTATEHUB_MIGRATOR_PASSWORD};Timezone=Africa/Johannesburg
       ConnectionStrings__Postgres: Host=postgres;Database=estatehub_dev;Username=estatehub_app;Password=${ESTATEHUB_APP_PASSWORD};Timezone=Africa/Johannesburg
     depends_on:
@@ -68,8 +70,19 @@ services:
     volumes:
       - .:/src
       - nuget_cache:/root/.nuget/packages
+      - dataprotection_keys:/keys
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      # Key ring for encrypted secrets (TOTP). A volume, so MFA keeps working across restarts.
+      DataProtection__KeysPath: /keys
+      # http://localhost isn't HTTPS, and Safari drops Secure cookies there. Development only:
+      # the API refuses to start with this off anywhere else.
+      Auth__RefreshCookieSecure: "false"
+      # Emails and texts land in Mailpit (http://localhost:8025); links point at the dev web app.
+      Messaging__SmtpHost: mailpit
+      Messaging__SmtpPort: "1025"
+      Messaging__SmsProvider: mailpit
+      Messaging__WebBaseUrl: http://localhost:3000
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_USE_POLLING_FILE_WATCHER: "1"
       TZ: Africa/Johannesburg
@@ -86,3 +99,4 @@ services:
 volumes:
   postgres_data:
   nuget_cache:
+  dataprotection_keys:

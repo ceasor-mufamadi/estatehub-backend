@@ -14,11 +14,13 @@ public class PlatformGrpcService : PlatformService.PlatformServiceBase
 {
     private readonly IEstateService _estates;
     private readonly ICurrentUser _user;
+    private readonly IMembersService _members;
 
-    public PlatformGrpcService(IEstateService estates, ICurrentUser user)
+    public PlatformGrpcService(IEstateService estates, ICurrentUser user, IMembersService members)
     {
         _estates = estates;
         _user = user;
+        _members = members;
     }
 
     public override async Task<EstateEntry> CreateEstate(CreateEstateRequest request, ServerCallContext context) =>
@@ -37,6 +39,15 @@ public class PlatformGrpcService : PlatformService.PlatformServiceBase
         var estateId = GrpcRequest.RequiredGuid(request.EstateId, "estate_id");
         return ToEntry(await _estates.SetFeatureAsync(
             estateId, request.FeatureKey, request.Enabled, _user.UserId!, context.CancellationToken));
+    }
+
+    [RequiresRecentMfa]
+    public override async Task<InviteToEstateResponse> InviteToEstate(InviteToEstateRequest request, ServerCallContext context)
+    {
+        var estateId = GrpcRequest.RequiredGuid(request.EstateId, "estate_id");
+        var invitation = await _members.InviteToEstateAsync(
+            estateId, new Application.Interfaces.InviteRequest(request.Name, request.Email, request.Phone, request.Role), context.CancellationToken);
+        return new InviteToEstateResponse { InvitationId = invitation.Id.ToString() };
     }
 
     private static EstateEntry ToEntry(EstateDto dto)

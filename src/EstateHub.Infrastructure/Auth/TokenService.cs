@@ -31,6 +31,7 @@ public sealed class TokenService : ITokenService
         var claims = new Dictionary<string, object>
         {
             [TokenClaims.Subject] = request.UserId,
+            [TokenClaims.SessionId] = request.SessionId.ToString(),
             [TokenClaims.Role] = request.Role,
             [TokenClaims.Permission] = request.Permissions.ToArray(),
             [TokenClaims.AuthMethod] = request.AuthMethods.ToArray(),
@@ -40,6 +41,8 @@ public sealed class TokenService : ITokenService
 
         if (request.EstateId is { } estateId)
             claims[TokenClaims.EstateId] = estateId.ToString();
+        if (request.Role == Roles.None)
+            claims.Remove(TokenClaims.Role);
 
         var token = _handler.CreateToken(new SecurityTokenDescriptor
         {

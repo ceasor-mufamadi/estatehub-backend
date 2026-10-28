@@ -11,6 +11,7 @@ public interface ITokenService
 
 public record TokenRequest(
     string UserId,
+    Guid SessionId,
     Guid? EstateId,
     string Role,
     IReadOnlyCollection<string> Permissions,
@@ -23,6 +24,7 @@ public record IssuedToken(string AccessToken, DateTimeOffset ExpiresAt);
 public static class TokenClaims
 {
     public const string Subject = "sub";
+    public const string SessionId = "sid";
     public const string EstateId = "estate_id";
     public const string Role = "role";
     public const string Permission = "perm";

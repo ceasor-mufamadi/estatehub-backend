@@ -18,8 +18,9 @@ public static class AuthorizationSetup
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-            .Configure<SigningKeyStore, IOptions<JwtSettings>>((options, keys, jwt) =>
+            .Configure<SigningKeyStore, IOptions<JwtSettings>, TimeProvider>((options, keys, jwt, clock) =>
             {
+                var skew = TimeSpan.FromSeconds(30);
                 options.MapInboundClaims = false; // keep our claim names: sub, estate_id, role, perm, amr, auth_time
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
@@ -33,7 +34,15 @@ public static class AuthorizationSetup
                     ValidAlgorithms = [SecurityAlgorithms.EcdsaSha256],
                     NameClaimType = TokenClaims.Subject,
                     RoleClaimType = TokenClaims.Role,
-                    ClockSkew = TimeSpan.FromSeconds(30),
+                    ClockSkew = skew,
+                    // Lifetime against the app's TimeProvider (the same clock sessions, lockouts and
+                    // step-up use), so all time rules agree, and tests can move time.
+                    LifetimeValidator = (notBefore, expires, _, _) =>
+                    {
+                        var now = clock.GetUtcNow().UtcDateTime;
+                        return expires is { } exp && exp.ToUniversalTime() > now - skew
+                               && (notBefore is not { } nbf || nbf.ToUniversalTime() <= now + skew);
+                    },
                 };
             });
 

@@ -49,6 +49,17 @@ public class EstateServiceTests
     }
 
     [Fact]
+    public async Task An_Estate_Name_Can_Only_Be_Used_Once()
+    {
+        _estates.Setup(r => r.NameExistsAsync("Sunset Ridge", It.IsAny<CancellationToken>())).ReturnsAsync(true);
+
+        var act = () => _sut.CreateAsync("  Sunset Ridge ", "sectional_title", "admin");
+
+        await act.Should().ThrowAsync<ArgumentException>().WithMessage("An estate named 'Sunset Ridge' already exists*");
+        _estates.Verify(r => r.AddAsync(It.IsAny<Estate>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Unknown_Feature_Is_Rejected()
     {
         var act = () => _sut.SetFeatureAsync(_estate.Id, "teleporter", true, "admin");

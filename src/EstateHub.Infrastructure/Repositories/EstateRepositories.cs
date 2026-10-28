@@ -25,6 +25,10 @@ public class EstateRepository : IEstateRepository
 
     public async Task<IReadOnlyList<Estate>> ListAsync(CancellationToken ct = default) =>
         await _db.Estates.AsNoTracking().OrderBy(x => x.Name).ToListAsync(ct);
+
+    // lower() on both sides, matching the ux_estates_name_ci index (migration EstateNameUnique).
+    public Task<bool> NameExistsAsync(string name, CancellationToken ct = default) =>
+        _db.Estates.AnyAsync(x => x.Name.ToLower() == name.ToLower(), ct);
 }
 
 public class FeatureRepository : IFeatureRepository

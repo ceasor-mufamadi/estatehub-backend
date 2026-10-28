@@ -33,7 +33,7 @@ public class AuthorizationEnforcedTests : IClassFixture<EstateHubApiFactory>
     public async Task Tampered_Token_Is_Unauthenticated()
     {
         var estateId = await _factory.CreateEstateAsync("Tamper Estate");
-        var token = _factory.Token("user-1", estateId, Roles.Manager);
+        var token = await _factory.TokenAsync("user-1", estateId, Roles.Manager);
 
         (await CreateBlockAs(token[..^4] + "abcd")).Should().Be(StatusCode.Unauthenticated);
     }
@@ -66,7 +66,7 @@ public class AuthorizationEnforcedTests : IClassFixture<EstateHubApiFactory>
     {
         var estateId = await _factory.CreateEstateAsync("Owner Estate");
 
-        (await CreateBlockAs(_factory.Token("owner-1", estateId, Roles.Owner))).Should().Be(StatusCode.PermissionDenied);
+        (await CreateBlockAs(await _factory.TokenAsync("owner-1", estateId, Roles.Owner))).Should().Be(StatusCode.PermissionDenied);
     }
 
     [Fact]
@@ -74,18 +74,19 @@ public class AuthorizationEnforcedTests : IClassFixture<EstateHubApiFactory>
     {
         var estateId = await _factory.CreateEstateAsync("Manager Estate");
 
-        (await CreateBlockAs(_factory.Token("manager-1", estateId, Roles.Manager))).Should().Be(StatusCode.OK);
+        (await CreateBlockAs(await _factory.TokenAsync("manager-1", estateId, Roles.Manager))).Should().Be(StatusCode.OK);
     }
 
     [Fact]
     public async Task Estate_Rpc_Without_An_Estate_In_The_Token_Is_FailedPrecondition() =>
-        (await CreateBlockAs(_factory.Token("manager-1", estateId: null, Roles.Manager))).Should().Be(StatusCode.FailedPrecondition);
+        // A super admin passes every permission check, so this reaches the tenant check.
+        (await CreateBlockAs(await _factory.TokenAsync("admin", estateId: null, Roles.SuperAdmin))).Should().Be(StatusCode.FailedPrecondition);
 
     [Fact]
     public async Task Estate_Staff_Cannot_Use_Platform_Rpcs()
     {
         var estateId = await _factory.CreateEstateAsync("Platform Probe");
-        var token = _factory.Token("manager-1", estateId, Roles.Manager, mfa: true);
+        var token = await _factory.TokenAsync("manager-1", estateId, Roles.Manager, mfa: true);
 
         (await GrpcStatus.Of(() => Platform().ListEstatesAsync(new ListEstatesRequest(), EstateHubApiFactory.Bearer(token)).ResponseAsync))
             .Should().Be(StatusCode.PermissionDenied);
@@ -95,7 +96,7 @@ public class AuthorizationEnforcedTests : IClassFixture<EstateHubApiFactory>
     public async Task Sensitive_Rpc_Without_Recent_Mfa_Asks_For_Step_Up()
     {
         var estateId = await _factory.CreateEstateAsync("Step Up Estate");
-        var token = _factory.Token("admin", estateId: null, Roles.SuperAdmin, mfa: false);
+        var token = await _factory.TokenAsync("admin", estateId: null, Roles.SuperAdmin, mfa: false);
 
         var error = await GrpcStatus.ErrorOf(() => Platform().SetEstateFeatureAsync(
             new SetEstateFeatureRequest { EstateId = estateId.ToString(), FeatureKey = FeatureCatalog.Parking, Enabled = true },
@@ -110,7 +111,7 @@ public class AuthorizationEnforcedTests : IClassFixture<EstateHubApiFactory>
     public async Task Sensitive_Rpc_With_Recent_Mfa_Is_Allowed()
     {
         var estateId = await _factory.CreateEstateAsync("Mfa Estate");
-        var token = _factory.Token("admin", estateId: null, Roles.SuperAdmin, mfa: true);
+        var token = await _factory.TokenAsync("admin", estateId: null, Roles.SuperAdmin, mfa: true);
 
         var estate = await Platform().SetEstateFeatureAsync(
             new SetEstateFeatureRequest { EstateId = estateId.ToString(), FeatureKey = FeatureCatalog.Parking, Enabled = true },
@@ -144,7 +145,7 @@ public class AuthorizationEnforcedTests : IClassFixture<EstateHubApiFactory>
     public async Task Errors_Do_Not_Leak_Internals()
     {
         var estateId = await _factory.CreateEstateAsync("Validation Estate");
-        var token = _factory.Token("manager-1", estateId, Roles.Manager);
+        var token = await _factory.TokenAsync("manager-1", estateId, Roles.Manager);
 
         var error = await GrpcStatus.ErrorOf(() => Estate().CreateBlockAsync(new CreateBlockRequest { Name = "" }, EstateHubApiFactory.Bearer(token)).ResponseAsync);
 

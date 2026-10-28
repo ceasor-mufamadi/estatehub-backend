@@ -5,6 +5,12 @@
     <ProjectReference Include="..\EstateHub.Application\EstateHub.Application.csproj" />
   </ItemGroup>
 
+  <!-- ASP.NET Core shared framework: Data Protection, Identity's password hasher, IHttpClientFactory,
+       memory cache, hosting/options. Part of the runtime, so no extra packages to vet. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Cronos" Version="0.11.1" />
     <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
@@ -15,8 +21,6 @@
     </PackageReference>
     <!-- Npgsql 10.0.1 depends on Relational 10.0.4; pin it to match the other EF packages. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.1" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.3.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
     <PackageReference Include="Polly" Version="8.6.6" />

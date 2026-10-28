@@ -30,9 +30,25 @@ message SetEstateFeatureRequest {
   bool enabled = 3;
 }
 
+message InviteToEstateRequest {
+  string estate_id = 1;
+  string name = 2;
+  // At least one of email / phone (SA mobile).
+  string email = 3;
+  string phone = 4;
+  // managing_agent, trustee or manager.
+  string role = 5;
+}
+
+message InviteToEstateResponse {
+  string invitation_id = 1;
+}
+
 service PlatformService {
   rpc CreateEstate(CreateEstateRequest) returns (EstateEntry);
   rpc ListEstates(ListEstatesRequest) returns (ListEstatesResponse);
   // Needs MFA within the last 15 minutes (AUTH-12).
   rpc SetEstateFeature(SetEstateFeatureRequest) returns (EstateEntry);
+  // The first staff of an estate. Needs MFA within the last 15 minutes.
+  rpc InviteToEstate(InviteToEstateRequest) returns (InviteToEstateResponse);
 }

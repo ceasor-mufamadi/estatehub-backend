@@ -16,7 +16,7 @@ public class TenantIsolationTests : IClassFixture<EstateHubApiFactory>
     {
         var a = await _factory.CreateEstateAsync($"Estate A {Guid.NewGuid():N}");
         var b = await _factory.CreateEstateAsync($"Estate B {Guid.NewGuid():N}");
-        return (a, _factory.Token("manager-a", a, Roles.Manager), b, _factory.Token("manager-b", b, Roles.Manager));
+        return (a, await _factory.TokenAsync("manager-a", a, Roles.Manager), b, await _factory.TokenAsync("manager-b", b, Roles.Manager));
     }
 
     [Fact]

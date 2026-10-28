@@ -1,3 +1,4 @@
+using EstateHub.Api.Admin;
 using EstateHub.Api.Authorization;
 using EstateHub.Api.Errors;
 using EstateHub.Api.Security;
@@ -53,6 +54,7 @@ else
     // Validates EstateHub's own ES256 tokens; deny by default (SECURITY.md layers 3–4).
     builder.Services.AddEstateHubAuthorization();
 
+    builder.Services.Configure<AuthCookieOptions>(builder.Configuration.GetSection(AuthCookieOptions.SectionName));
     builder.Services.Configure<ReverseProxyOptions>(builder.Configuration.GetSection(ReverseProxyOptions.SectionName));
     builder.Services.AddSingleton<ClientIpResolver>();
     builder.Services.AddEstateHubRateLimits(builder.Configuration);
@@ -89,6 +91,15 @@ else
 
 var app = builder.Build();
 
+StartupChecks.Run(app);
+
+// One-off admin commands, e.g. `dotnet run --project src/EstateHub.Api -- create-super-admin`.
+if (args is [CreateSuperAdminCommand.Name, ..])
+{
+    await CreateSuperAdminCommand.RunAsync(app.Services);
+    return;
+}
+
 if (runMode != "jobs")
 {
     app.UseCors();
@@ -104,6 +115,7 @@ if (runMode != "jobs")
     app.MapGrpcService<PlatformGrpcService>();
     app.MapGrpcService<EstateGrpcService>();
     app.MapGrpcService<AuditLogGrpcService>();
+    app.MapGrpcService<MembersGrpcService>();
 
     if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Docker")
     {

@@ -34,6 +34,13 @@ public class EstateHubDbContext : DbContext
     public DbSet<EstateFeature> EstateFeatures => Set<EstateFeature>();
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<Block> Blocks => Set<Block>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<AuthSession> AuthSessions => Set<AuthSession>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<RecoveryCode> RecoveryCodes => Set<RecoveryCode>();
+    public DbSet<MfaChallenge> MfaChallenges => Set<MfaChallenge>();
+    public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
+    public DbSet<Invitation> Invitations => Set<Invitation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

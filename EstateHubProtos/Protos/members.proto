@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+option csharp_namespace = "EstateHub.Api";
+package estatehub.members.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// People in the caller's active estate (PHASE1.md §2a). Who may grant which role follows the
+// hierarchy in SECURITY.md layer 4; granting, changing and removing need MFA within 15 minutes.
+
+message Member {
+  string membership_id = 1;
+  string user_id = 2;
+  string name = 3;
+  string email = 4;
+  string phone = 5;
+  string role = 6;
+  google.protobuf.Timestamp since = 7;
+  // The caller may change this member's role or remove them.
+  bool can_manage = 8;
+}
+
+message PendingInvitation {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string phone = 4;
+  string role = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  google.protobuf.Timestamp last_sent_at = 7;
+  int32 send_count = 8;
+}
+
+message ListMembersRequest {}
+
+message ListMembersResponse {
+  repeated Member members = 1;
+  repeated PendingInvitation invitations = 2;
+  // Roles the caller may give (empty for read-only roles).
+  repeated string grantable_roles = 3;
+}
+
+message InviteRequest {
+  string name = 1;
+  // At least one of email / phone (SA mobile). The link goes to the email when there is one.
+  string email = 2;
+  string phone = 3;
+  string role = 4;
+}
+
+message InvitationIdRequest {
+  string invitation_id = 1;
+}
+
+message ChangeRoleRequest {
+  string membership_id = 1;
+  string role = 2;
+}
+
+message RemoveMemberRequest {
+  string membership_id = 1;
+}
+
+message RemoveMemberResponse {}
+
+message RevokeInvitationResponse {}
+
+service MembersService {
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
+  rpc Invite(InviteRequest) returns (PendingInvitation);
+  // A fresh link (the previous one stops working), valid 7 more days.
+  rpc ResendInvitation(InvitationIdRequest) returns (PendingInvitation);
+  rpc RevokeInvitation(InvitationIdRequest) returns (RevokeInvitationResponse);
+  rpc ChangeRole(ChangeRoleRequest) returns (Member);
+  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse);
+}

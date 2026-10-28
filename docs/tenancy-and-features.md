@@ -20,9 +20,19 @@ with the estate id; cron jobs go through `EstateJobRunner` (one DI scope per est
 no automated test yet (SECURITY.md §6). The EF layer is covered by `TenantDbContextTests` and the
 API by `TenantIsolationTests`.
 
-Note for Sprint 2: sign-in must list a user's memberships across estates, which RLS on
-`memberships` blocks by design. Do it through a narrow `SECURITY DEFINER` function (owned by the
-migrator, returning only that user's rows), not by loosening the policy.
+**The one way across the boundary (Sprint 2, migration `AuthCore`).** Sign-in must list a user's
+memberships in every estate before any estate is active, which RLS on `memberships` forbids for
+`estatehub_app` by design. `estatehub_user_memberships(user_id)` does it instead:
+- `SECURITY DEFINER`, owned by `estatehub_migrator`, `search_path` pinned; EXECUTE for `estatehub_app` only.
+- A second, SELECT-only policy (`membership_directory`) lets only the migrator role read across
+  estates; the tenant policy still binds the app role everywhere else.
+- Returns one user's **active** memberships: estate id, estate name, role. Nothing else.
+- Used by sign-in, `ListMyEstates`, `SwitchEstate` and the per-request session check
+  (`IMembershipDirectory`; tests use an EF InMemory stand-in).
+
+Checked by hand in psql on 2026-10-27 as `estatehub_app`: direct read of memberships with no estate
+set → 0 rows; the function → only the active membership; dropping the policy or replacing the
+function → refused.
 
 ## Feature toggles
 

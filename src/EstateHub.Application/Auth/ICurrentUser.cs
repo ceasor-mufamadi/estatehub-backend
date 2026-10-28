@@ -8,6 +8,9 @@ public interface ICurrentUser
     /// <summary>JWT "sub".</summary>
     string? UserId { get; }
 
+    /// <summary>JWT "sid": the session this token belongs to.</summary>
+    Guid? SessionId { get; }
+
     /// <summary>JWT "estate_id": the estate this token is scoped to. Null for platform-level tokens.</summary>
     Guid? EstateId { get; }
 

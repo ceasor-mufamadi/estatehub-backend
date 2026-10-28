@@ -23,6 +23,10 @@ x-hardened: &hardened
   read_only: true
   tmpfs:
     - /tmp:size=64m
+  # Data Protection key ring (encrypts TOTP secrets, AUTH-18). Outside the database and backed up
+  # separately (SECURITY.md layer 13): losing it means every user must set up MFA again.
+  volumes:
+    - dataprotection_keys:/keys
   cap_drop: [ALL]
   security_opt:
     - no-new-privileges:true
@@ -56,6 +60,9 @@ services:
         limits:
           cpus: "0.5"
           memory: 384M
+
+volumes:
+  dataprotection_keys:
 
 networks:
   # The network cloudflared/Caddy already use on the server (see `docker network ls`).

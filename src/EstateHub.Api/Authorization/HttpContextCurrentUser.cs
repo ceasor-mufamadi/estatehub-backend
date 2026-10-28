@@ -20,6 +20,8 @@ public sealed class HttpContextCurrentUser : ICurrentUser
 
     public string? UserId => First(TokenClaims.Subject);
 
+    public Guid? SessionId => Guid.TryParse(First(TokenClaims.SessionId), out var id) ? id : null;
+
     public Guid? EstateId => Guid.TryParse(First(TokenClaims.EstateId), out var id) ? id : null;
 
     public string? Role => First(TokenClaims.Role);

@@ -1,3 +1,4 @@
+using EstateHub.Application.Auth;
 using EstateHub.Application.Interfaces;
 using EstateHub.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +13,8 @@ public static class DependencyInjection
         services.AddScoped<IFeatureService, FeatureService>();
         services.AddScoped<IEstateService, EstateService>();
         services.AddScoped<IBlockService, BlockService>();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IMembersService, MembersService>();
 
         return services;
     }

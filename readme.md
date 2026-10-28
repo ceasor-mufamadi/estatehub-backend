@@ -46,9 +46,18 @@ docker compose -f docker-compose.dev.yml up -d         # Postgres (dev + test DB
 
 With PowerShell (`brew install powershell`), `pwsh ./Make.ps1 <target>` wraps the same commands.
 
-**Trying the API:** in Development, `AuthService/DevSignIn` issues a token for any role (it is
-disabled everywhere else). Use the token as `authorization: Bearer <token>` metadata, e.g. with
-grpcurl or Postman (gRPC reflection is on in Development):
+**First super admin** (there is no public sign-up): asks for email, name and password, then the
+authenticator app is set up at first sign-in on the web app.
+
+```bash
+docker compose -f docker-compose.dev.yml run --rm -e ASPNETCORE_ENVIRONMENT=Development sdk \
+  dotnet run --project src/EstateHub.Api -- create-super-admin
+```
+
+**Trying the API:** in Development, `AuthService/DevSignIn` signs in a throwaway account
+(`<label>@dev.estatehub.local`) with any role, through a real session (it is disabled everywhere
+else). Use the returned token as `authorization: Bearer <token>` metadata, e.g. with grpcurl or
+Postman (gRPC reflection is on in Development):
 
 ```bash
 grpcurl -plaintext -d '{"user_id":"me","role":"super_admin","mfa":true}' localhost:5269 estatehub.auth.v1.AuthService/DevSignIn

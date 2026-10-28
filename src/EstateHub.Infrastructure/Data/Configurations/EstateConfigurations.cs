@@ -50,11 +50,31 @@ public class MembershipConfiguration : IEntityTypeConfiguration<Membership>
     {
         entity.ToTable("memberships");
         entity.HasKey(x => x.Id);
-        entity.Property(x => x.UserId).IsRequired().HasMaxLength(100);
         entity.Property(x => x.Role).IsRequired().HasMaxLength(32);
 
         entity.HasIndex(x => new { x.EstateId, x.UserId }).IsUnique();
         entity.HasIndex(x => x.UserId);
+        entity.HasOne<Estate>().WithMany().HasForeignKey(x => x.EstateId).OnDelete(DeleteBehavior.Cascade);
+        entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+// Tenant-scoped (RLS). Accepting needs the estate before RLS lets the row be read, so the
+// estatehub_invitation_estate SECURITY DEFINER function maps a token hash to its estate first.
+public class InvitationConfiguration : IEntityTypeConfiguration<Invitation>
+{
+    public void Configure(EntityTypeBuilder<Invitation> entity)
+    {
+        entity.ToTable("invitations");
+        entity.HasKey(x => x.Id);
+        entity.Property(x => x.Name).IsRequired().HasMaxLength(200);
+        entity.Property(x => x.Email).HasMaxLength(254);
+        entity.Property(x => x.Phone).HasMaxLength(16);
+        entity.Property(x => x.Role).IsRequired().HasMaxLength(32);
+        entity.Property(x => x.TokenHash).IsRequired().HasMaxLength(64);
+
+        entity.HasIndex(x => x.TokenHash).IsUnique();
+        entity.HasIndex(x => new { x.EstateId, x.LastSentAt });
         entity.HasOne<Estate>().WithMany().HasForeignKey(x => x.EstateId).OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -35,6 +35,10 @@ public class EstateService : IEstateService
         if (!SchemeTypes.All.Contains(schemeType))
             throw new ArgumentException($"Unknown scheme type '{schemeType}'.", nameof(schemeType));
 
+        // Super admins pick estates by name, so two with the same name would be easy to mix up.
+        if (await _estates.NameExistsAsync(name, ct))
+            throw new ArgumentException($"An estate named '{name}' already exists. Add the suburb or town to tell them apart.", nameof(name));
+
         var estate = new Estate { Name = name, SchemeType = schemeType };
         await _estates.AddAsync(estate, ct);
 

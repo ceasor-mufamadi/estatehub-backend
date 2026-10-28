@@ -73,7 +73,7 @@ public sealed class AlwaysOnAttribute(string reason) : Attribute
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class)]
 public sealed class RequiresRecentMfaAttribute : Attribute
 {
-    public static readonly TimeSpan MaxAge = TimeSpan.FromMinutes(15);
+    public static readonly TimeSpan MaxAge = Application.Services.AuthService.RecentMfaMaxAge;
 }
 
 /// <summary>

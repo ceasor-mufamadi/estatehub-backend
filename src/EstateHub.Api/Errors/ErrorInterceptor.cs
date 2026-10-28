@@ -1,3 +1,4 @@
+using EstateHub.Application.Auth;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 
@@ -6,6 +7,9 @@ namespace EstateHub.Api.Errors;
 /// <summary>
 /// Outermost interceptor. Turns exceptions into gRPC statuses so services don't need try/catch:
 ///   ArgumentException      → INVALID_ARGUMENT (message is meant for the user)
+///   AuthFailedException    → UNAUTHENTICATED (message is meant for the user, never says which part failed)
+///   RateLimitedException   → RESOURCE_EXHAUSTED (message is meant for the user)
+///   ActionNotAllowedException → PERMISSION_DENIED (message is meant for the user)
 ///   KeyNotFoundException   → NOT_FOUND
 ///   RpcException           → passed through
 ///   anything else          → INTERNAL "Something went wrong (ref XXXXXXXX)"; details only in the log
@@ -51,6 +55,12 @@ public sealed class ErrorInterceptor : Interceptor
     {
         switch (ex)
         {
+            case AuthFailedException:
+                return new RpcException(new Status(StatusCode.Unauthenticated, ex.Message));
+            case RateLimitedException:
+                return new RpcException(new Status(StatusCode.ResourceExhausted, ex.Message));
+            case ActionNotAllowedException:
+                return new RpcException(new Status(StatusCode.PermissionDenied, ex.Message));
             case ArgumentException argument:
                 return new RpcException(new Status(StatusCode.InvalidArgument, UserMessage(argument)));
             case KeyNotFoundException:

@@ -5,27 +5,179 @@ package estatehub.auth.v1;
 
 import "google/protobuf/timestamp.proto";
 
-// Sprint 1 surface: token signing keys + a development-only sign-in. The real flows
-// (OTP, password + MFA, refresh, sessions, invitations, estate switching) land in Sprint 2;
-// see PHASE1.md §2a.
+// Sign-in and sessions (PHASE1.md §2a). Browsers never see a refresh token: the API sets it as an
+// HttpOnly cookie scoped to this service's path (AUTH-10), and Refresh/Logout read it from there.
+//
+// Staff sign-in:  PasswordSignIn → mfa step → VerifyMfa                  → SignedIn
+// First time:     PasswordSignIn → mfa step (enrolment_required)
+//                   → BeginTotpEnrolment (scan QR) → ConfirmTotpEnrolment → SignedIn + recovery codes
+// Resident:       RequestOtp (email or SA mobile) → VerifyOtp → SignedIn (or an mfa step for staff)
+// Invitation:     GetInvitation (link) → StartInvitation (code to the invited address)
+//                   → AcceptInvitation (code [+ new password for staff]) → SignedIn or mfa step
+// Page load:      Refresh (cookie) → SignedIn, or UNAUTHENTICATED when there is no live session
+
+message PasswordSignInRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message PasswordSignInResponse {
+  oneof step {
+    // Done: no second factor needed (non-staff without MFA).
+    SignedIn signed_in = 1;
+    // Password accepted; finish with VerifyMfa, or set up MFA first when enrolment_required.
+    MfaStep mfa = 2;
+  }
+}
+
+message MfaStep {
+  // Proves the password step for 5 minutes. Send it with the next call.
+  string challenge_token = 1;
+  // True: this account must set up an authenticator app before signing in (staff, first time).
+  bool enrolment_required = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+// A new access token (15 min, memory only) and what it allows.
+message SignedIn {
+  string access_token = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  string user_id = 3;
+  // Empty = platform level (super admin, or choose an estate with SwitchEstate).
+  string estate_id = 4;
+  // Empty when not acting in any estate.
+  string role = 5;
+  repeated string permissions = 6;
+  // Only right after setting up MFA. Show once; they are never shown again.
+  repeated string recovery_codes = 7;
+  string email = 8;
+}
+
+message VerifyMfaRequest {
+  string challenge_token = 1;
+  // The 6-digit authenticator code, or one recovery code.
+  string code = 2;
+}
+
+message BeginTotpEnrolmentRequest {
+  string challenge_token = 1;
+}
+
+message BeginTotpEnrolmentResponse {
+  // Base32 key, for typing into the app when scanning isn't possible.
+  string secret = 1;
+  string otpauth_uri = 2;
+  // The otpauth URI as a QR code image (data:image/png;base64,…).
+  string qr_code_data_url = 3;
+}
+
+message ConfirmTotpEnrolmentRequest {
+  string challenge_token = 1;
+  // The first 6-digit code the app shows, proving it was set up correctly.
+  string code = 2;
+}
+
+message RefreshRequest {}
+
+message StepUpRequest {
+  // Authenticator code (or recovery code). Gives the session a fresh MFA time for sensitive actions.
+  string code = 1;
+}
+
+message LogoutRequest {}
+
+message LogoutResponse {}
+
+message LogoutAllRequest {}
+
+message LogoutAllResponse {}
+
+message ListMyEstatesRequest {}
+
+message ListMyEstatesResponse {
+  repeated MyEstate items = 1;
+  // Super admin: may switch back to platform administration (SwitchEstate with an empty estate_id).
+  bool platform_access = 2;
+}
+
+message MyEstate {
+  string estate_id = 1;
+  string estate_name = 2;
+  string role = 3;
+}
+
+message SwitchEstateRequest {
+  // Empty = back to platform level.
+  string estate_id = 1;
+}
 
 message DevSignInRequest {
-  // Free-form user id for local testing (there is no user table until Sprint 2).
+  // Short label for a throwaway account (becomes <label>@dev.estatehub.local).
   string user_id = 1;
-  // Estate to scope the token to. Empty = platform-level token (only useful for super_admin).
+  // Estate to sign in to. Ignored for super_admin.
   string estate_id = 2;
   // One of the role keys in RolePermissions (e.g. "manager", "owner", "super_admin").
   string role = 3;
-  // Pretend the user just completed MFA (sets amr=mfa and auth_time=now).
+  // True: MFA just now. False: MFA over 15 minutes ago, so step-up actions ask again.
   bool mfa = 4;
 }
 
-message TokenResponse {
-  string access_token = 1;
-  google.protobuf.Timestamp expires_at = 2;
-  repeated string permissions = 3;
-  string role = 4;
-  string estate_id = 5;
+message RequestOtpRequest {
+  // Email address or South African mobile number (082 123 4567 / +27 82 123 4567).
+  string identifier = 1;
+}
+
+// Always the same shape, whether or not an account exists (AUTH-07).
+message OtpStep {
+  string challenge_token = 1;
+  // "email" or "sms".
+  string channel = 2;
+  // Masked: "c****r@gmail.com", "+27 ** *** 4567".
+  string destination = 3;
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+message VerifyOtpRequest {
+  string challenge_token = 1;
+  string code = 2;
+}
+
+// The next step after a code: signed in, or (staff) an MFA step.
+message SignInStepResponse {
+  oneof step {
+    SignedIn signed_in = 1;
+    MfaStep mfa = 2;
+  }
+}
+
+message GetInvitationRequest {
+  // The token from the invitation link (the part after #).
+  string invitation_token = 1;
+}
+
+message GetInvitationResponse {
+  string estate_name = 1;
+  string role = 2;
+  // Who was invited, as the inviter typed it.
+  string name = 3;
+  // Where the code will go: "email" or "sms", and the masked address.
+  string channel = 4;
+  string destination = 5;
+  // Staff joining without a password yet must choose one when accepting.
+  bool password_required = 6;
+  google.protobuf.Timestamp expires_at = 7;
+}
+
+message StartInvitationRequest {
+  string invitation_token = 1;
+}
+
+message AcceptInvitationRequest {
+  // From StartInvitation.
+  string challenge_token = 1;
+  string code = 2;
+  // Only when GetInvitation said password_required.
+  string new_password = 3;
 }
 
 message GetJwksRequest {}
@@ -36,7 +188,27 @@ message GetJwksResponse {
 }
 
 service AuthService {
+  rpc PasswordSignIn(PasswordSignInRequest) returns (PasswordSignInResponse);
+  rpc RequestOtp(RequestOtpRequest) returns (OtpStep);
+  rpc VerifyOtp(VerifyOtpRequest) returns (SignInStepResponse);
+  // NOT_FOUND when the link was used, revoked or has expired.
+  rpc GetInvitation(GetInvitationRequest) returns (GetInvitationResponse);
+  rpc StartInvitation(StartInvitationRequest) returns (OtpStep);
+  rpc AcceptInvitation(AcceptInvitationRequest) returns (SignInStepResponse);
+  rpc VerifyMfa(VerifyMfaRequest) returns (SignedIn);
+  rpc BeginTotpEnrolment(BeginTotpEnrolmentRequest) returns (BeginTotpEnrolmentResponse);
+  rpc ConfirmTotpEnrolment(ConfirmTotpEnrolmentRequest) returns (SignedIn);
+  // Uses the refresh cookie; rotates it.
+  rpc Refresh(RefreshRequest) returns (SignedIn);
+  // Signed in: re-confirm MFA before a sensitive action (the "estatehub-step-up" trailer asks for it).
+  rpc StepUp(StepUpRequest) returns (SignedIn);
+  // Ends this browser's session (refresh cookie) and clears the cookie.
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  // Signed in: ends every session of the caller, on every device.
+  rpc LogoutAll(LogoutAllRequest) returns (LogoutAllResponse);
+  rpc ListMyEstates(ListMyEstatesRequest) returns (ListMyEstatesResponse);
+  rpc SwitchEstate(SwitchEstateRequest) returns (SignedIn);
   // Disabled (UNIMPLEMENTED) outside the Development and Testing environments.
-  rpc DevSignIn(DevSignInRequest) returns (TokenResponse);
+  rpc DevSignIn(DevSignInRequest) returns (SignedIn);
   rpc GetJwks(GetJwksRequest) returns (GetJwksResponse);
 }

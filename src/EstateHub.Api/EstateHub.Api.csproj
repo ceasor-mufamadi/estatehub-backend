@@ -14,6 +14,8 @@
     <PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.83.0" />
     <PackageReference Include="Grpc.AspNetCore.Web" Version="2.83.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
+    <!-- MFA setup QR code (PNG, no System.Drawing). MIT, no dependencies. -->
+    <PackageReference Include="QRCoder" Version="1.8.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

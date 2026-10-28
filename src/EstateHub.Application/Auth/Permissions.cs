@@ -16,6 +16,11 @@ public static class Permissions
 
     public const string EstateRead = "estatehub.estate.read";
     public const string EstateWrite = "estatehub.estate.write";
+
+    public const string MembersRead = "estatehub.members.read";
+
+    /// <summary>Invite, change roles, remove. Which roles may be granted is narrowed by RoleGrants.</summary>
+    public const string MembersManage = "estatehub.members.manage";
 }
 
 public static class Roles
@@ -28,6 +33,14 @@ public static class Roles
     public const string Tenant = "tenant";
     public const string Guard = "guard";
     public const string Contractor = "contractor";
+
+    /// <summary>Signed in but not acting in any estate (estate picker only): no permissions.</summary>
+    public const string None = "";
+
+    private static readonly HashSet<string> StaffRoles = new(StringComparer.Ordinal) { SuperAdmin, ManagingAgent, Trustee, Manager };
+
+    /// <summary>Roles that can see or change a whole estate: they must use MFA (AUTH-03) and get 12-hour sessions.</summary>
+    public static bool IsStaff(string role) => StaffRoles.Contains(role);
 }
 
 /// <summary>
@@ -40,9 +53,9 @@ public static class RolePermissions
     private static readonly Dictionary<string, string[]> Map = new(StringComparer.Ordinal)
     {
         [Roles.SuperAdmin] = [Permissions.Unrestricted, Permissions.PlatformEstatesManage],
-        [Roles.ManagingAgent] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite],
-        [Roles.Manager] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite],
-        [Roles.Trustee] = [Permissions.AuditLogRead, Permissions.EstateRead],
+        [Roles.ManagingAgent] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite, Permissions.MembersRead, Permissions.MembersManage],
+        [Roles.Manager] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite, Permissions.MembersRead, Permissions.MembersManage],
+        [Roles.Trustee] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.MembersRead],
         [Roles.Owner] = [Permissions.EstateRead],
         [Roles.Tenant] = [Permissions.EstateRead],
         [Roles.Guard] = [Permissions.EstateRead],
@@ -54,6 +67,7 @@ public static class RolePermissions
     public static bool IsKnownRole(string role) => Map.ContainsKey(role);
 
     public static IReadOnlyList<string> For(string role) =>
+        role == Roles.None ? [] :
         Map.TryGetValue(role, out var permissions)
             ? permissions
             : throw new ArgumentException($"Unknown role '{role}'.", nameof(role));

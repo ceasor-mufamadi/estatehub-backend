@@ -4,6 +4,7 @@ using EstateHub.Application.Tenancy;
 using Google.Protobuf;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
+using Microsoft.AspNetCore.Authorization;
 
 namespace EstateHub.Api.Authorization;
 
@@ -40,26 +41,48 @@ public abstract class PreCallCheckInterceptor : Interceptor
 }
 
 /// <summary>
-/// Tenant isolation, layer 1 of 3: the active estate comes only from the signed token's estate_id,
-/// never from the request. Sets ITenantContext once for the call. Without an estate, only
-/// [PlatformLevel] RPCs may run.
+/// Runs first on every call with a token, two checks:
+/// 1. The token's session is still alive and still allows the token's estate and role (signed out,
+///    revoked, membership removed or role changed → UNAUTHENTICATED within ~30 s; SECURITY.md layer 4).
+/// 2. Tenant isolation, layer 1 of 3: the active estate comes only from the signed token's estate_id,
+///    never from the request. Sets ITenantContext once for the call. Without an estate, only
+///    [PlatformLevel] RPCs may run.
 /// </summary>
-/// <remarks>Sprint 2 adds: session + membership still active (≈30 s cache) so revocation is near-immediate.</remarks>
 public sealed class TenantInterceptor : PreCallCheckInterceptor
 {
-    protected override Task CheckAsync(object request, ServerCallContext context)
+    public const string SessionEndedMessage = Application.Services.AuthService.SessionEnded;
+
+    protected override async Task CheckAsync(object request, ServerCallContext context)
     {
+        // [AllowAnonymous] RPCs (sign-in, refresh, logout) ignore any bearer token, so a stale or
+        // revoked one can't block signing in or out, and they never act inside an estate.
+        if (Metadata(context)?.GetMetadata<IAllowAnonymous>() is not null)
+            return;
+
         var user = Service<ICurrentUser>(context);
+        if (user.IsAuthenticated)
+            await CheckSessionAsync(user, context);
+
         if (user.EstateId is { } estateId)
         {
             Service<ITenantContext>(context).Use(estateId);
-            return Task.CompletedTask;
+            return;
         }
 
         if (Metadata(context)?.GetMetadata<PlatformLevelAttribute>() is not null)
-            return Task.CompletedTask;
+            return;
 
         throw new RpcException(new Status(StatusCode.FailedPrecondition, "Select an estate first."));
+    }
+
+    private static async Task CheckSessionAsync(ICurrentUser user, ServerCallContext context)
+    {
+        var valid = user.SessionId is { } sessionId
+                    && Guid.TryParse(user.UserId, out var userId)
+                    && await Service<ISessionValidator>(context).IsValidAsync(sessionId, userId, user.EstateId, user.Role, context.CancellationToken);
+
+        if (!valid)
+            throw new RpcException(new Status(StatusCode.Unauthenticated, SessionEndedMessage));
     }
 }
 
