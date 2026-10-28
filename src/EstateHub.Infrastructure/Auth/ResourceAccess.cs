@@ -10,6 +10,8 @@ namespace EstateHub.Infrastructure.Auth;
 /// - User: the caller themselves.
 /// - Unit: staff (estate read) see every unit; residents only units they own or live in today
 ///   (SECURITY.md layer 4: privacy between neighbours).
+/// - Account: staff (billing read) see every account; residents only accounts they hold, also after
+///   selling (their old statement stays theirs). Tenants hold none.
 /// </summary>
 public sealed class ResourceAccess : IResourceAccess
 {
@@ -39,6 +41,7 @@ public sealed class ResourceAccess : IResourceAccess
         {
             ResourceKind.User => string.Equals(id.Trim(), _user.UserId, StringComparison.Ordinal),
             ResourceKind.Unit => Guid.TryParse(id, out var unitId) && await CanSeeUnitAsync(unitId, ct),
+            ResourceKind.Account => Guid.TryParse(id, out var accountId) && await CanSeeAccountAsync(accountId, ct),
             _ => false,
         };
     }
@@ -54,5 +57,16 @@ public sealed class ResourceAccess : IResourceAccess
         var mine = _db.People.Where(p => p.UserId == userId).Select(p => p.Id);
         return await _db.Ownerships.AnyAsync(o => o.UnitId == unitId && mine.Contains(o.PersonId) && o.FromDate <= today && (o.ToDate == null || o.ToDate >= today), ct)
                || await _db.Occupancies.AnyAsync(o => o.UnitId == unitId && mine.Contains(o.PersonId) && o.FromDate <= today && (o.ToDate == null || o.ToDate >= today), ct);
+    }
+
+    private async Task<bool> CanSeeAccountAsync(Guid accountId, CancellationToken ct)
+    {
+        if (_user.HasPermission(Permissions.BillingRead))
+            return await _db.Accounts.AnyAsync(a => a.Id == accountId, ct);
+        if (!Guid.TryParse(_user.UserId, out var userId))
+            return false;
+
+        var mine = _db.People.Where(p => p.UserId == userId).Select(p => p.Id);
+        return await _db.AccountHolders.AnyAsync(h => h.AccountId == accountId && mine.Contains(h.PersonId), ct);
     }
 }

@@ -36,6 +36,15 @@ public class EstateHubDbContext : DbContext
     public DbSet<Block> Blocks => Set<Block>();
     public DbSet<Unit> Units => Set<Unit>();
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
+    public DbSet<BillingSettings> BillingSettings => Set<BillingSettings>();
+    public DbSet<ChargeType> ChargeTypes => Set<ChargeType>();
+    public DbSet<UnitCharge> UnitCharges => Set<UnitCharge>();
+    public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<AccountHolder> AccountHolders => Set<AccountHolder>();
+    public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
+    public DbSet<LevyBudget> LevyBudgets => Set<LevyBudget>();
+    public DbSet<MeteredAmount> MeteredAmounts => Set<MeteredAmount>();
+    public DbSet<BillingRun> BillingRuns => Set<BillingRun>();
     public DbSet<ImportInvite> ImportInvites => Set<ImportInvite>();
     public DbSet<Person> People => Set<Person>();
     public DbSet<Ownership> Ownerships => Set<Ownership>();

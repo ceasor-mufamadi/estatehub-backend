@@ -77,6 +77,9 @@ public interface IUnitRepository
     Task<Unit?> GetAsync(Guid id, CancellationToken ct = default);
     Task<bool> SectionExistsAsync(int sectionNumber, Guid? exceptUnitId, CancellationToken ct = default);
     Task<bool> AnyInBlockAsync(Guid blockId, CancellationToken ct = default);
+
+    /// <summary>Owners, occupants or billing accounts (ever): such a unit stays, its history depends on it.</summary>
+    Task<bool> HasHistoryAsync(Guid unitId, CancellationToken ct = default);
     void Add(Unit unit);
     void Remove(Unit unit);
     Task SaveChangesAsync(CancellationToken ct = default);

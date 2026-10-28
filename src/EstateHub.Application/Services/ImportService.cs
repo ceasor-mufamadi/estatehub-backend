@@ -1,5 +1,6 @@
 using System.Text.Json;
 using EstateHub.Application.Auth;
+using EstateHub.Application.Background;
 using EstateHub.Application.DTOs;
 using EstateHub.Application.Imports;
 using EstateHub.Application.Interfaces;
@@ -23,25 +24,28 @@ public class ImportService : IImportService
 
     private readonly IImportRepository _imports;
     private readonly IImportFileReader _reader;
-    private readonly IImportQueue _queue;
-    private readonly IImportProgress _progress;
+    private readonly IWorkQueue _queue;
+    private readonly IWorkProgress _progress;
     private readonly IPeopleService _people;
     private readonly IMembersService _members;
     private readonly ICurrentUser _user;
     private readonly IAuditLogService _audit;
     private readonly TimeProvider _clock;
+    private readonly IAccountService _accounts;
 
     public ImportService(
         IImportRepository imports,
         IImportFileReader reader,
-        IImportQueue queue,
-        IImportProgress progress,
+        IWorkQueue queue,
+        IWorkProgress progress,
         IPeopleService people,
         IMembersService members,
         ICurrentUser user,
         IAuditLogService audit,
-        TimeProvider clock)
+        TimeProvider clock,
+        IAccountService accounts)
     {
+        _accounts = accounts;
         _imports = imports;
         _reader = reader;
         _queue = queue;
@@ -145,7 +149,7 @@ public class ImportService : IImportService
         await _imports.SaveChangesAsync(ct);
         await AuditAsync(batch, "Committed", $"invitations={(sendInvitations ? "yes" : "no")}", ct);
 
-        _queue.Enqueue(new ImportWork(batch.EstateId, batch.Id, _user.UserId!, _user.Role!));
+        _queue.Enqueue(new EstateWork(WorkKinds.Import, batch.EstateId, batch.Id, _user.UserId!, _user.Role!));
         return await ToDtoAsync(batch, ct);
     }
 
@@ -245,6 +249,7 @@ public class ImportService : IImportService
         }
 
         _progress.Report(batch.Id, plan.Units.Count, plan.Units.Count, batch.Message);
+        await _accounts.SyncAllAsync(ct); // the imported owners get their accounts (slice 4.1)
         await SendPendingInvitationsAsync(batch.Id, ct);
         _progress.Clear(batch.Id);
     }
@@ -330,6 +335,17 @@ public class ImportService : IImportService
         if (interrupted.Count > 0)
             await _imports.SaveChangesAsync(ct);
         return interrupted.Count;
+    }
+
+    public async Task MarkFailedAsync(Guid batchId, CancellationToken ct = default)
+    {
+        if (await _imports.GetAsync(batchId, ct) is { } batch && ImportStatuses.IsActive(batch.Status))
+        {
+            batch.Status = ImportStatuses.Failed;
+            batch.Message = "Something went wrong and nothing was imported. Try again; if it keeps failing, contact support.";
+            batch.FinishedAt = Now;
+            await _imports.SaveChangesAsync(ct);
+        }
     }
 
     // ---------- helpers ----------

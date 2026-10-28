@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+option csharp_namespace = "EstateHub.Api";
+package estatehub.accounts.v1;
+
+// Accounts and the ledger (slice 4.1). One account per ownership period: arrears stay with the former
+// owner. Entries are never edited; corrections are reversals. Money is a decimal string in rands.
+
+message AccountSummary {
+  string id = 1;
+  string unit_id = 2;
+  int32 section_number = 3;
+  // The payment reference (the unit's number).
+  string number = 4;
+  repeated string holders = 5;
+  // yyyy-MM-dd.
+  string opened_on = 6;
+  // Empty while open.
+  string closed_on = 7;
+  // Positive = owes, negative = in credit.
+  string balance = 8;
+}
+
+message LedgerLine {
+  string id = 1;
+  string date = 2;
+  string type = 3;
+  string description = 4;
+  string reference = 5;
+  string debit = 6;
+  string credit = 7;
+  string running_balance = 8;
+  // For a reversal: the entry it cancels.
+  string reverses_entry_id = 9;
+  bool is_reversed = 10;
+}
+
+message AccountDetail {
+  AccountSummary account = 1;
+  repeated LedgerLine entries = 2;
+}
+
+message ListAccountsRequest {
+  // all, open, owing, in_credit, former_owners_owing.
+  string filter = 1;
+  string search = 2;
+}
+
+message ListAccountsResponse {
+  repeated AccountSummary items = 1;
+}
+
+message ListUnitAccountsRequest {
+  string unit_id = 1;
+}
+
+message GetAccountRequest {
+  string account_id = 1;
+}
+
+message MyAccountsRequest {}
+
+message RecordOpeningBalanceRequest {
+  string account_id = 1;
+  // Positive if they owe, negative if in credit.
+  string amount = 2;
+  string date = 3;
+}
+
+message ReverseEntryRequest {
+  string entry_id = 1;
+  string reason = 2;
+}
+
+service AccountsService {
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
+  rpc ListUnitAccounts(ListUnitAccountsRequest) returns (ListAccountsResponse);
+  // Staff: any account here. Residents: accounts they hold (also after selling).
+  rpc GetAccount(GetAccountRequest) returns (AccountDetail);
+  rpc MyAccounts(MyAccountsRequest) returns (ListAccountsResponse);
+  rpc RecordOpeningBalance(RecordOpeningBalanceRequest) returns (AccountDetail);
+  rpc ReverseEntry(ReverseEntryRequest) returns (AccountDetail);
+}

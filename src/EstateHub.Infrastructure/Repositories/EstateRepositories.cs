@@ -126,6 +126,11 @@ public class UnitRepository : IUnitRepository
 
     public Task<bool> AnyInBlockAsync(Guid blockId, CancellationToken ct = default) => _db.Units.AnyAsync(u => u.BlockId == blockId, ct);
 
+    public async Task<bool> HasHistoryAsync(Guid unitId, CancellationToken ct = default) =>
+        await _db.Ownerships.AnyAsync(o => o.UnitId == unitId, ct)
+        || await _db.Occupancies.AnyAsync(o => o.UnitId == unitId, ct)
+        || await _db.Accounts.AnyAsync(a => a.UnitId == unitId, ct);
+
     public void Add(Unit unit) => _db.Units.Add(unit);
 
     public void Remove(Unit unit) => _db.Units.Remove(unit);

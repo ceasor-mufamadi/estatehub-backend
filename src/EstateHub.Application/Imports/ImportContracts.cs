@@ -1,3 +1,4 @@
+using EstateHub.Application.Background;
 using EstateHub.Domain.Entities;
 
 namespace EstateHub.Application.Imports;
@@ -29,6 +30,9 @@ public interface IImportService
 
     /// <summary>Puts batches interrupted by a restart back to ready (the transaction means nothing was saved).</summary>
     Task<int> RecoverInterruptedAsync(CancellationToken ct = default);
+
+    /// <summary>After an unexpected error: nothing was imported (the transaction rolled back).</summary>
+    Task MarkFailedAsync(Guid batchId, CancellationToken ct = default);
 }
 
 /// <summary>Reads .xlsx or .csv into header + rows, with limits against oversized and zip-bomb files.</summary>
@@ -78,24 +82,6 @@ public interface IImportTransaction : IAsyncDisposable
     Task CommitAsync(CancellationToken ct = default);
 }
 
-/// <summary>Hands committed batches to the import worker (one at a time).</summary>
-public interface IImportQueue
-{
-    void Enqueue(ImportWork work);
-}
-
-/// <summary>The batch, its estate, and who committed it (the work runs on their behalf).</summary>
-public record ImportWork(Guid EstateId, Guid BatchId, string UserId, string Role);
-
-/// <summary>Live progress of running batches (in memory; the database has the status).</summary>
-public interface IImportProgress
-{
-    void Report(Guid batchId, int done, int total, string message);
-    ImportProgressDto? Get(Guid batchId);
-    void Clear(Guid batchId);
-}
-
-public record ImportProgressDto(int Done, int Total, string Message);
 
 public record ImportProblemDto(int Row, string Column, string Message);
 
@@ -110,5 +96,5 @@ public record ImportInvitesDto(int Pending, int Sent, int Linked, int Failed, Da
 public record ImportBatchDto(
     Guid Id, string FileName, string Status, int RowCount, DateTime CreatedAt,
     ImportSummaryDto Summary, IReadOnlyList<ImportProblemDto> Problems, int MoreProblems,
-    IReadOnlyList<ImportPreviewUnitDto> Preview, ImportProgressDto? Progress, string? Message,
+    IReadOnlyList<ImportPreviewUnitDto> Preview, WorkProgressDto? Progress, string? Message,
     bool SendInvitations, ImportInvitesDto Invites, DateTime? FinishedAt);

@@ -19,6 +19,7 @@ public class PeopleService : IPeopleService
     private readonly ICurrentUser _user;
     private readonly IAuditLogService _audit;
     private readonly TimeProvider _clock;
+    private readonly IAccountService _accounts;
 
     public PeopleService(
         IPeopleRepository people,
@@ -28,8 +29,10 @@ public class PeopleService : IPeopleService
         IMembersService invitations,
         ICurrentUser user,
         IAuditLogService audit,
-        TimeProvider clock)
+        TimeProvider clock,
+        IAccountService accounts)
     {
+        _accounts = accounts;
         _people = people;
         _units = units;
         _users = users;
@@ -136,17 +139,30 @@ public class PeopleService : IPeopleService
         if (sharePercent is <= 0 or > 100 || decimal.Round(sharePercent, 2) != sharePercent)
             throw new ArgumentException("Share must be a percentage above 0 and at most 100, with up to 2 decimals.");
 
-        var owner = await ResolveAsync(person, ct);
-        var open = (await _people.OwnershipsOfUnitAsync(unitId, ct)).Where(o => o.ToDate is null).ToList();
-        if (open.Any(o => o.PersonId == owner.Id))
-            throw new ArgumentException($"{owner.Name} already owns this unit.");
-        if (open.Sum(o => o.SharePercent) + sharePercent > 100)
-            throw new ArgumentException($"The owners' shares would add up to more than 100% (already {open.Sum(o => o.SharePercent):0.##}%). End a previous ownership first.");
+        // Every ownership that overlaps the new one, on any day from its start. An end date is the last day
+        // as owner (inclusive), so a seller ending today and a buyer starting today would both own today.
+        var start = from ?? Today;
+        var overlapping = (await _people.OwnershipsOfUnitAsync(unitId, ct)).Where(o => o.ToDate is null || o.ToDate >= start).ToList();
+        if (person.PersonId is { } existingId && overlapping.Any(o => o.PersonId == existingId))
+            throw new ArgumentException("That person already owns this unit for (part of) that period.");
+        foreach (var day in overlapping.Select(o => o.FromDate).Where(d => d > start).Append(start).Distinct())
+        {
+            var held = overlapping.Where(o => o.FromDate <= day && (o.ToDate is null || o.ToDate >= day)).ToList();
+            if (held.Sum(o => o.SharePercent) + sharePercent <= 100)
+                continue;
+            if (held.FirstOrDefault(o => o.ToDate is not null) is { } ending && await _people.GetPersonAsync(ending.PersonId, ct) is { } seller)
+                throw new ArgumentException(
+                    $"{seller.Name} still owns {ending.SharePercent:0.##}% until {ending.ToDate:yyyy-MM-dd} (their last day), so on {day:yyyy-MM-dd} the owners would hold more than 100%. " +
+                    $"Start the new owner on {ending.ToDate!.Value.AddDays(1):yyyy-MM-dd}, or end {seller.Name}'s ownership earlier.");
+            throw new ArgumentException($"The owners' shares would add up to more than 100% (already {held.Sum(o => o.SharePercent):0.##}% on {day:yyyy-MM-dd}). End a previous ownership first.");
+        }
 
-        var ownership = new Ownership { UnitId = unitId, PersonId = owner.Id, SharePercent = sharePercent, FromDate = from ?? Today };
+        var owner = await ResolveAsync(person, ct);
+        var ownership = new Ownership { UnitId = unitId, PersonId = owner.Id, SharePercent = sharePercent, FromDate = start };
         _people.Add(ownership);
         await _people.SaveChangesAsync(ct);
         await AuditAsync("Ownership", ownership.Id, "Added", $"unit={unitId} person={owner.Id} share={sharePercent} from={ownership.FromDate:yyyy-MM-dd}", ct);
+        await _accounts.SyncUnitAsync(unitId, ct); // accounts follow ownership (slice 4.1)
         return await GetUnitAsync(unitId, ct);
     }
 
@@ -163,6 +179,7 @@ public class PeopleService : IPeopleService
             occupancy.ToDate = to;
         await _people.SaveChangesAsync(ct);
         await AuditAsync("Ownership", ownership.Id, "Ended", $"to={to:yyyy-MM-dd}", ct);
+        await _accounts.SyncUnitAsync(ownership.UnitId, ct); // accounts follow ownership (slice 4.1)
         return await GetUnitAsync(ownership.UnitId, ct);
     }
 
@@ -172,6 +189,7 @@ public class PeopleService : IPeopleService
         _people.Remove(ownership);
         await _people.SaveChangesAsync(ct);
         await AuditAsync("Ownership", ownership.Id, "Removed", $"unit={ownership.UnitId} person={ownership.PersonId} (data-entry correction)", ct);
+        await _accounts.SyncUnitAsync(ownership.UnitId, ct); // accounts follow ownership (slice 4.1)
         return await GetUnitAsync(ownership.UnitId, ct);
     }
 
@@ -233,11 +251,19 @@ public class PeopleService : IPeopleService
         if (person.Email is null && person.Phone is null)
             throw new ArgumentException($"Add an email address or mobile number for {person.Name} first.");
 
-        var owns = (await _people.OwnershipsOfPeopleAsync([person.Id], ct)).Any(o => IsCurrent(o.FromDate, o.ToDate) || o.FromDate > Today);
-        var lives = (await _people.OccupanciesOfPeopleAsync([person.Id], ct)).Any(o => IsCurrent(o.FromDate, o.ToDate) || o.FromDate > Today);
+        var ownerships = await _people.OwnershipsOfPeopleAsync([person.Id], ct);
+        var occupancies = await _people.OccupanciesOfPeopleAsync([person.Id], ct);
+        var owns = ownerships.Any(o => IsCurrent(o.FromDate, o.ToDate) || o.FromDate > Today);
+        var lives = occupancies.Any(o => IsCurrent(o.FromDate, o.ToDate) || o.FromDate > Today);
         if (!owns && !lives)
             throw new ArgumentException($"Add {person.Name} as owner or occupant of a unit first.");
-        var role = owns ? Roles.Owner : Roles.Tenant;
+
+        // The role follows what carries on after today: an owner whose last day is today but who stays on as a
+        // tenant is invited as a tenant.
+        static bool Continues(DateOnly? to, DateOnly today) => to is null || to > today;
+        var role = ownerships.Any(o => Continues(o.ToDate, Today)) ? Roles.Owner
+            : occupancies.Any(o => Continues(o.ToDate, Today)) ? Roles.Tenant
+            : owns ? Roles.Owner : Roles.Tenant;
 
         // Already an account with a membership here: link the record, no invitation needed.
         var user = person.Email is not null ? await _users.FindUserByEmailAsync(person.Email, ct) : await _users.FindUserByPhoneAsync(person.Phone!, ct);

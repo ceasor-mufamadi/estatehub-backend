@@ -22,8 +22,13 @@ public static class DependencyInjection
         services.AddScoped<IMembersService, MembersService>();
         services.AddScoped<IGuardDeviceService, GuardDeviceService>();
         services.AddScoped<IImportService, ImportService>();
+        services.AddScoped<Background.IEstateWorkHandler, ImportWorkHandler>();
         services.AddScoped<IResidentService, ResidentService>();
         services.AddScoped<IPersonDataService, PersonDataService>();
+        services.AddScoped<IBillingService, BillingService>();
+        services.AddScoped<IAccountService, AccountService>();
+        services.AddScoped<Billing.IBillingRunService, BillingRunService>();
+        services.AddScoped<Background.IEstateWorkHandler, Billing.BillingRunWorkHandler>();
 
         // Who is acting: the API replaces this with the request's caller; background work sets CallerOverride.
         services.AddScoped<CallerOverride>();

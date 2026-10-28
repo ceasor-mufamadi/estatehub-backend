@@ -39,6 +39,12 @@ public enum ResourceKind
     /// live in today. Privacy between neighbours (SECURITY.md layer 4).
     /// </summary>
     Unit,
+
+    /// <summary>
+    /// A billing account id: staff with billing read see every account of their estate; residents only
+    /// accounts they hold (current or former owner).
+    /// </summary>
+    Account,
 }
 
 /// <summary>Answers "may the current caller see/change this record?" for ownership checks.</summary>

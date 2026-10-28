@@ -64,3 +64,64 @@ public class ImportInvitationsJob : ICronJob
         return await scope.ServiceProvider.GetRequiredService<IImportService>().SendPendingInvitationsAsync(batchId, ct);
     }
 }
+
+/// <summary>
+/// ⏰ Nightly: accounts follow ownership (slice 4.1). A sale recorded ahead of time (new owners from the 1st)
+/// takes effect on the day, even if nobody touches the unit then: the seller's account closes, the buyer's opens.
+/// </summary>
+[CronJob("AccountSyncJob")]
+public class AccountSyncJob : ICronJob
+{
+    private readonly EstateJobRunner _estates;
+    private readonly ILogger<AccountSyncJob> _logger;
+
+    public AccountSyncJob(EstateJobRunner estates, ILogger<AccountSyncJob> logger)
+    {
+        _estates = estates;
+        _logger = logger;
+    }
+
+    public async Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        var units = 0;
+        await _estates.ForEachEstateAsync(Application.Features.FeatureCatalog.Billing,
+            async (services, _, ct) => units += await services.GetRequiredService<IAccountService>().SyncAllAsync(ct), cancellationToken);
+        _logger.LogInformation("AccountSyncJob: {Units} units checked", units);
+    }
+}
+
+/// <summary>
+/// ⏰ Daily 02:00: on an estate's billing day, makes that month's **draft** run (PHASE1.md §1c), so
+/// staff find it ready to check and post. Never posts by itself. Idempotent: one run per month per estate.
+/// </summary>
+[CronJob("LevyBillingDraftJob")]
+public class LevyBillingDraftJob : ICronJob
+{
+    private static readonly TimeZoneInfo SouthAfrica = TimeZoneInfo.FindSystemTimeZoneById("Africa/Johannesburg");
+
+    private readonly EstateJobRunner _estates;
+    private readonly TimeProvider _clock;
+    private readonly ILogger<LevyBillingDraftJob> _logger;
+
+    public LevyBillingDraftJob(EstateJobRunner estates, TimeProvider clock, ILogger<LevyBillingDraftJob> logger)
+    {
+        _estates = estates;
+        _clock = clock;
+        _logger = logger;
+    }
+
+    public async Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(_clock.GetUtcNow().UtcDateTime, SouthAfrica));
+        var drafts = 0;
+        await _estates.ForEachEstateAsync(Application.Features.FeatureCatalog.Billing, async (services, _, ct) =>
+        {
+            var settings = await services.GetRequiredService<IBillingService>().GetSettingsAsync(ct);
+            if (settings.BillingDay != today.Day)
+                return;
+            await services.GetRequiredService<Application.Billing.IBillingRunService>().CreateDraftAsync(today.ToString("yyyy-MM"), ct);
+            drafts++;
+        }, cancellationToken);
+        _logger.LogInformation("LevyBillingDraftJob: {Drafts} drafts ready", drafts);
+    }
+}

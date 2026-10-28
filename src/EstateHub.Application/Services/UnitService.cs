@@ -72,6 +72,8 @@ public class UnitService : IUnitService
     public async Task DeleteAsync(Guid unitId, string performedBy, CancellationToken ct = default)
     {
         var unit = await _units.GetAsync(unitId, ct) ?? throw new KeyNotFoundException("Unit not found.");
+        if (await _units.HasHistoryAsync(unitId, ct))
+            throw new ArgumentException($"Section {unit.SectionNumber} has owners, occupants or a billing account, so it can't be removed. Fix its details instead.");
         _units.Remove(unit);
         await _units.SaveChangesAsync(ct);
         await _audit.CreateAsync(new CreateAuditLogDto("Unit", unit.Id.ToString(), "Removed", performedBy,

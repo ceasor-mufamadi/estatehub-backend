@@ -31,7 +31,7 @@ public static class ImportColumns
         (OwnerEmail, "Owner email", "Optional. Used for the portal invitation; an existing person with this email is reused."),
         (OwnerMobile, "Owner mobile", "Optional. South African mobile, e.g. 082 123 4567."),
         (OwnerShare, "Owner share %", "Optional. Blank = 100 for a single owner; co-owners must give shares totalling at most 100."),
-        (OwnerSince, "Owner since", "Optional. Date, e.g. 2020-01-31. Blank = today."),
+        (OwnerSince, "Owner since", "Optional. Date, e.g. 2020-01-31. Blank = today. For billing, give the real date: an owner is billed from the first billing day on or after it."),
         (OwnerLivesHere, "Owner lives here", "Optional. yes or no (blank = no). A person lives in one unit only."),
         (TenantName, "Tenant name", "Optional. The tenant renting this unit."),
         (TenantEmail, "Tenant email", "Optional."),

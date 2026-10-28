@@ -77,6 +77,46 @@ public class PeopleTests : IClassFixture<EstateHubApiFactory>
         withTenant.Occupants.Should().ContainSingle(o => o.Person.Name == "Stranger" && o.Kind == "tenant" && o.Current);
     }
 
+    [Fact] // found in hand testing 2026-10-28: a seller ending today and a buyer from today made 180%
+    public async Task A_Seller_Whose_Last_Day_Is_Today_And_A_Buyer_From_Today_Cant_Overlap()
+    {
+        var (_, manager, unit, _) = await EstateWithUnitsAsync();
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(_factory.Clock.GetUtcNow().UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("Africa/Johannesburg")));
+        var seller = await People().AddOwnerAsync(new AddOwnerRequest { UnitId = unit, Person = New("Olivia", NewEmail()), SharePercent = "80", FromDate = "2020-01-01" }, manager);
+        await People().EndOwnershipAsync(new EndOwnershipRequest { OwnershipId = seller.Owners[0].Id, ToDate = today.ToString("yyyy-MM-dd") }, manager);
+        var buyerEmail = NewEmail();
+
+        var error = await GrpcStatus.ErrorOf(() => People().AddOwnerAsync(new AddOwnerRequest
+        {
+            UnitId = unit, Person = New("Pfunzo", buyerEmail), SharePercent = "100", FromDate = today.ToString("yyyy-MM-dd"),
+        }, manager).ResponseAsync);
+
+        error!.Status.Detail.Should().Contain($"Olivia still owns 80% until {today:yyyy-MM-dd}").And.Contain($"Start the new owner on {today.AddDays(1):yyyy-MM-dd}");
+        (await People().ListPeopleAsync(new ListPeopleRequest { Search = "Pfunzo" }, manager)).Items.Should().BeEmpty("a refused owner isn't half-created");
+
+        var bought = await People().AddOwnerAsync(new AddOwnerRequest
+        {
+            UnitId = unit, Person = New("Pfunzo", buyerEmail), SharePercent = "100", FromDate = today.AddDays(1).ToString("yyyy-MM-dd"),
+        }, manager);
+        bought.Owners.Should().HaveCount(2);
+    }
+
+    [Fact] // found in hand testing 2026-10-28: an owner leaving today who stays on as tenant was invited as owner
+    public async Task The_Invitation_Role_Follows_What_Carries_On()
+    {
+        var (_, manager, unit, _) = await EstateWithUnitsAsync();
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(_factory.Clock.GetUtcNow().UtcDateTime, TimeZoneInfo.FindSystemTimeZoneById("Africa/Johannesburg")));
+        var email = NewEmail();
+        var detail = await People().AddOwnerAsync(new AddOwnerRequest { UnitId = unit, Person = New("Olivia", email), SharePercent = "100", FromDate = "2020-01-01" }, manager);
+        var olivia = detail.Owners[0].Person.Id;
+        await People().EndOwnershipAsync(new EndOwnershipRequest { OwnershipId = detail.Owners[0].Id, ToDate = today.ToString("yyyy-MM-dd") }, manager);
+        await People().AddOccupantAsync(new AddOccupantRequest { UnitId = unit, Person = new PersonRef { PersonId = olivia }, Kind = "tenant", FromDate = today.AddDays(1).ToString("yyyy-MM-dd") }, manager);
+
+        await People().InvitePersonAsync(new InvitePersonRequest { PersonId = olivia }, manager);
+
+        _factory.Outbox.LastTo(email).Should().Contain("as tenant");
+    }
+
     [Fact] // owners may hold several units; anyone lives in only one at a time
     public async Task An_Owner_Can_Own_Several_Units_But_A_Person_Lives_In_Only_One()
     {

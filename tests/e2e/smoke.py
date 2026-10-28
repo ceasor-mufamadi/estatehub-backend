@@ -317,8 +317,8 @@ mgr2_token = s(mgr2, 1)
 st, err, template, _ = call(I + "GetImportTemplate", b"", mgr2_token)
 check("import template is an .xlsx workbook", st == 0 and template.get(2, [b""])[0][:2] == b"PK", f"{st} {err}")
 ann, ten = f"ann-{RUN}@example.test", f"ten-{RUN}@example.test"
-csv = ("Section,PQ %,Block,Owner name,Owner email,Tenant name,Tenant email\n"
-       f"10,60,Smoke Block,Ann Owner,{ann},,\n11,40,Smoke Block,Ann Owner,{ann},Ten Ant,{ten}\n")
+csv = ("Section,PQ %,Block,Owner name,Owner email,Owner since,Tenant name,Tenant email\n"
+       f"10,60,Smoke Block,Ann Owner,{ann},2020-01-01,,\n11,40,Smoke Block,Ann Owner,{ann},2020-01-01,Ten Ant,{ten}\n")
 st, err, preview, _ = call(I + "PreviewImport", msg((1, "smoke.csv"), (2, csv.encode())), mgr2_token)
 import_id = s(preview, 1)
 summary = parse(preview.get(6, [b""])[0]) if preview.get(6) else {}
@@ -359,6 +359,55 @@ st4, _, unit_after, _ = call(P + "GetUnit", msg((1, unit_ids[0])), mgr_token)
 owner_after = parse(parse(unit_after.get(6, [b""])[0]).get(2, [b""])[0]) if unit_after.get(6) else {}
 check("former owner anonymised on Postgres: history kept, account scrubbed, sessions ended",
       st == 0 and st2 == 0 and st3 == 16 and s(owner_after, 2).startswith("Former resident") and not s(owner_after, 3), f"{st} {err} {st2} {err2} {st3} {s(owner_after, 2)}")
+
+# ---------- Sprint 4.1: billing setup, accounts, ledger (estate 2: the imported units) ----------
+B = "estatehub.billing.v1.BillingService/"
+AC = "estatehub.accounts.v1.AccountsService/"
+st, err, settings, _ = call(B + "GetBillingSettings", b"", mgr2_token)
+st2, _, charges, _ = call(B + "ListChargeTypes", b"", mgr2_token)
+check("billing settings created with defaults and the built-in levy (Postgres)",
+      st == 0 and settings.get(2) == [1] and settings.get(3) == [7] and any(parse(c).get(5) == [1] for c in charges.get(1, [])), f"{st} {err}")
+st, err, bank, _ = call(B + "UpdateBankDetails", msg((1, "Smoke Bank"), (2, "123456"), (3, "Smoke Body Corporate"), (4, "1234567890")), mgr2_token)
+check("bank details saved with a fresh MFA", st == 0 and s(bank, 12) == "1234567890", f"{st} {err}")
+st, err, accs, _ = call(AC + "ListAccounts", b"", mgr2_token)
+acc_items = [parse(a) for a in accs.get(1, [])]
+check("imported owners got one account per unit (accounts follow ownership)",
+      st == 0 and len(acc_items) == 2 and all(s(a, 5) == "Ann Owner" for a in acc_items), f"{st} {err} {len(acc_items)}")
+acc_id = s(acc_items[0], 1) if acc_items else ""
+st, err, opened, _ = call(AC + "RecordOpeningBalance", msg((1, acc_id), (2, "250.00"), (3, "2026-01-01")), mgr2_token)
+entry_id = s(parse(opened.get(2, [b""])[0]), 1) if opened.get(2) else ""
+st2, err2, reversed_, _ = call(AC + "ReverseEntry", msg((1, entry_id), (2, "smoke")), mgr2_token)
+check("opening balance then reversal on Postgres: balance back to 0.00",
+      st == 0 and s(parse(opened.get(1, [b""])[0]), 8) == "250.00" and st2 == 0 and s(parse(reversed_.get(1, [b""])[0]), 8) == "0.00", f"{st} {err} {st2} {err2}")
+st, _, _, _ = call(AC + "GetAccount", msg((1, acc_id)), mgr_token)
+check("estate 1 can't open estate 2's account (RLS + ownership check)", st in (5, 7), str(st))
+
+# ---------- Sprint 4.2: a month posted on Postgres (estate 2: sections 10 and 11, quotas 60/40) ----------
+R = "estatehub.billing.v1.BillingRunsService/"
+month = time.strftime("%Y-%m")
+st, err, _, _ = call(R + "AddBudget", msg((1, "2020-01"), (2, "1000.00"), (3, "250.00")), mgr2_token)
+st2, err2, water, _ = call(B + "CreateChargeType", msg((1, msg((1, "Water"), (2, "metered"), (4, True)))), mgr2_token)
+water_csv = "Unit,Amount,Reading\n10,123.45,W1\n11,99.99,W2\n"
+st3, err3, uploaded, _ = call(R + "UploadMetered", msg((1, month), (2, s(water, 1)), (3, "water.csv"), (4, water_csv.encode())), mgr2_token)
+check("budget, metered charge and upload saved (Postgres)", st == 0 and st2 == 0 and st3 == 0 and uploaded.get(1) == [1], f"{st} {err} {st2} {err2} {st3} {err3}")
+st, err, run, _ = call(R + "CreateDraft", msg((1, month)), mgr2_token)
+run_id = s(run, 1)
+st2, err2, preview, _ = call(R + "PreviewRun", msg((1, run_id)), mgr2_token)
+check("draft preview: 600 + 150 + 123.45 and 400 + 100 + 99.99 (quota split to the cent)",
+      st == 0 and st2 == 0 and s(preview, 4) == "1473.44" and not preview.get(5), f"{st} {err} {st2} {err2} {s(preview, 4)} {[b.decode() for b in preview.get(5, [])]}")
+st, err, _, _ = call(R + "PostRun", msg((1, run_id)), mgr2_token)
+for _ in range(100):
+    _, _, run, _ = call(R + "GetRun", msg((1, run_id)), mgr2_token)
+    if s(run, 3) not in ("queued", "posting") and not run.get(9):
+        break
+    time.sleep(0.1)
+_, _, accs2, _ = call(AC + "ListAccounts", b"", mgr2_token)
+balances = sorted(s(parse(a), 8) for a in accs2.get(1, []))
+check("run posted through the worker on Postgres (RLS + one transaction): balances match the preview",
+      st == 0 and s(run, 3) == "posted" and s(run, 5) == "1473.44" and balances == ["599.99", "873.45"], f"{st} {err} {s(run, 3)} {s(run, 7)} {balances}")
+st, err, _, _ = call(R + "PostRun", msg((1, run_id)), mgr2_token)
+st2, _, again, _ = call(R + "CreateDraft", msg((1, month)), mgr2_token)
+check("a month is posted once: posting again is refused, the month's run is the same", st == 3 and s(again, 1) == run_id, f"{st} {err}")
 
 delete_run_mail()
 print(f"\n{sum(ok for _, ok in results)}/{len(results)} passed (run {RUN})")

@@ -32,6 +32,16 @@ public static class Permissions
     /// <summary>Import units, owners and tenants from a spreadsheet, and send their invitations (slice 3.3).</summary>
     public const string ImportsRun = "estatehub.imports.run";
 
+    /// <summary>Billing (Sprint 4): accounts and the ledger, settings, charge types, runs.</summary>
+    public const string BillingRead = "estatehub.billing.read";
+    public const string BillingWrite = "estatehub.billing.write";
+
+    /// <summary>Post a billing run (needs a fresh MFA, AUTH-12).</summary>
+    public const string BillingPost = "estatehub.billing.post";
+
+    /// <summary>Trustees: approve special levies and write-offs (four-eyes).</summary>
+    public const string BillingApprove = "estatehub.billing.approve";
+
     /// <summary>Pair and revoke guard tablets (AUTH-14).</summary>
     public const string DevicesManage = "estatehub.devices.manage";
 }
@@ -69,9 +79,9 @@ public static class RolePermissions
     private static readonly Dictionary<string, string[]> Map = new(StringComparer.Ordinal)
     {
         [Roles.SuperAdmin] = [Permissions.Unrestricted, Permissions.PlatformEstatesManage, Permissions.PlatformImpersonate],
-        [Roles.ManagingAgent] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite, Permissions.MembersRead, Permissions.MembersManage, Permissions.DevicesManage, Permissions.PeopleRead, Permissions.PeopleWrite, Permissions.ImportsRun],
-        [Roles.Manager] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite, Permissions.MembersRead, Permissions.MembersManage, Permissions.DevicesManage, Permissions.PeopleRead, Permissions.PeopleWrite, Permissions.ImportsRun],
-        [Roles.Trustee] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.MembersRead, Permissions.PeopleRead],
+        [Roles.ManagingAgent] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite, Permissions.MembersRead, Permissions.MembersManage, Permissions.DevicesManage, Permissions.PeopleRead, Permissions.PeopleWrite, Permissions.ImportsRun, Permissions.BillingRead, Permissions.BillingWrite, Permissions.BillingPost],
+        [Roles.Manager] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.EstateWrite, Permissions.MembersRead, Permissions.MembersManage, Permissions.DevicesManage, Permissions.PeopleRead, Permissions.PeopleWrite, Permissions.ImportsRun, Permissions.BillingRead, Permissions.BillingWrite, Permissions.BillingPost],
+        [Roles.Trustee] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.MembersRead, Permissions.PeopleRead, Permissions.BillingRead, Permissions.BillingApprove],
         // Residents see only their own units (ResourceKind.Unit checks, Sprint 3), never the estate's
         // unit list, other units or the activity log: privacy between neighbours (POPIA).
         [Roles.Owner] = [],
@@ -80,7 +90,7 @@ public static class RolePermissions
         [Roles.Guard] = [Permissions.EstateRead],
         [Roles.Contractor] = [],
         // Read-only: the same reads as a trustee, nothing that writes (AUTH-13 "read-only by default").
-        [Roles.Support] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.MembersRead, Permissions.PeopleRead],
+        [Roles.Support] = [Permissions.AuditLogRead, Permissions.EstateRead, Permissions.MembersRead, Permissions.PeopleRead, Permissions.BillingRead],
     };
 
     public static IReadOnlyCollection<string> AllRoles => Map.Keys;

@@ -22,6 +22,100 @@ namespace EstateHub.Infrastructure.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.Account", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateOnly?>("ClosedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("closed_on");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("number");
+
+                    b.Property<DateOnly>("OpenedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("opened_on");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("unit_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_accounts");
+
+                    b.HasIndex("EstateId", "UnitId")
+                        .HasDatabaseName("ix_accounts_estate_id_unit_id");
+
+                    b.HasIndex(new[] { "UnitId" }, "ux_accounts_one_open_per_unit")
+                        .IsUnique()
+                        .HasDatabaseName("ux_accounts_one_open_per_unit")
+                        .HasFilter("closed_on IS NULL");
+
+                    b.ToTable("accounts", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.AccountHolder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<Guid>("PersonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("person_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_account_holders");
+
+                    b.HasIndex("EstateId")
+                        .HasDatabaseName("ix_account_holders_estate_id");
+
+                    b.HasIndex("PersonId")
+                        .HasDatabaseName("ix_account_holders_person_id");
+
+                    b.HasIndex("AccountId", "PersonId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_account_holders_account_id_person_id");
+
+                    b.ToTable("account_holders", (string)null);
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.AuditLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -193,6 +287,157 @@ namespace EstateHub.Infrastructure.Data.Migrations
                     b.ToTable("auth_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.BillingRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AccountsPosted")
+                        .HasColumnType("integer")
+                        .HasColumnName("accounts_posted");
+
+                    b.Property<DateOnly>("BillingDate")
+                        .HasColumnType("date")
+                        .HasColumnName("billing_date");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("period");
+
+                    b.Property<DateTime?>("PostedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("posted_at");
+
+                    b.Property<Guid?>("PostedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("posted_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("TotalPosted")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("total_posted");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_billing_runs");
+
+                    b.HasIndex("EstateId", "Period")
+                        .IsUnique()
+                        .HasDatabaseName("ix_billing_runs_estate_id_period");
+
+                    b.ToTable("billing_runs", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.BillingSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BankAccountName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("bank_account_name");
+
+                    b.Property<string>("BankAccountNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("bank_account_number");
+
+                    b.Property<string>("BankBranchCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("bank_branch_code");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("bank_name");
+
+                    b.Property<int>("BillingDay")
+                        .HasColumnType("integer")
+                        .HasColumnName("billing_day");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("DueDay")
+                        .HasColumnType("integer")
+                        .HasColumnName("due_day");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<int>("FinancialYearStartMonth")
+                        .HasColumnType("integer")
+                        .HasColumnName("financial_year_start_month");
+
+                    b.Property<bool>("InterestEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("interest_enabled");
+
+                    b.Property<decimal>("InterestRatePercent")
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("interest_rate_percent");
+
+                    b.Property<string>("LevyDisplay")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("levy_display");
+
+                    b.Property<string>("QueriesEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("queries_email");
+
+                    b.Property<string>("QueriesPhone")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("queries_phone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_billing_settings");
+
+                    b.HasIndex("EstateId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_billing_settings_estate_id");
+
+                    b.ToTable("billing_settings", (string)null);
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.Block", b =>
                 {
                     b.Property<Guid>("Id")
@@ -226,6 +471,68 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_blocks_estate_id_name");
 
                     b.ToTable("blocks", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.ChargeType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("Amount")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsLevy")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_levy");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("method");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_charge_types");
+
+                    b.HasIndex("EstateId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_charge_types_estate_id_name");
+
+                    b.HasIndex(new[] { "EstateId" }, "ux_charge_types_one_levy")
+                        .IsUnique()
+                        .HasDatabaseName("ux_charge_types_one_levy")
+                        .HasFilter("is_levy");
+
+                    b.ToTable("charge_types", (string)null);
                 });
 
             modelBuilder.Entity("EstateHub.Domain.Entities.Estate", b =>
@@ -760,6 +1067,163 @@ namespace EstateHub.Infrastructure.Data.Migrations
                     b.ToTable("known_devices", (string)null);
                 });
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.LedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("account_id");
+
+                    b.Property<Guid?>("ChargeTypeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("charge_type_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<decimal>("Credit")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("credit");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<decimal>("Debit")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("debit");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<string>("Period")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("period");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("reference");
+
+                    b.Property<Guid?>("ReversesEntryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reverses_entry_id");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("source");
+
+                    b.Property<Guid?>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ledger_entries");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("ix_ledger_entries_account_id");
+
+                    b.HasIndex("ChargeTypeId")
+                        .HasDatabaseName("ix_ledger_entries_charge_type_id");
+
+                    b.HasIndex("ReversesEntryId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_ledger_entries_reverses_entry_id")
+                        .HasFilter("reverses_entry_id IS NOT NULL");
+
+                    b.HasIndex("SourceId")
+                        .HasDatabaseName("ix_ledger_entries_source_id");
+
+                    b.HasIndex("EstateId", "AccountId", "Date")
+                        .HasDatabaseName("ix_ledger_entries_estate_id_account_id_date");
+
+                    b.ToTable("ledger_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ledger_one_side", "(debit >= 0 AND credit >= 0) AND (debit = 0 OR credit = 0) AND (debit + credit > 0)");
+                        });
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.LevyBudget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("AdminFundMonthly")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("admin_fund_monthly");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("EffectiveFrom")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("effective_from");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("note");
+
+                    b.Property<decimal>("ReserveFundMonthly")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("reserve_fund_monthly");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_levy_budgets");
+
+                    b.HasIndex("EstateId", "EffectiveFrom")
+                        .IsUnique()
+                        .HasDatabaseName("ix_levy_budgets_estate_id_effective_from");
+
+                    b.ToTable("levy_budgets", (string)null);
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.Membership", b =>
                 {
                     b.Property<Guid>("Id")
@@ -804,6 +1268,73 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_memberships_estate_id_user_id");
 
                     b.ToTable("memberships", (string)null);
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.MeteredAmount", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("ChargeTypeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("charge_type_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("file_name");
+
+                    b.Property<string>("Period")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("period");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("reference");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("unit_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("uploaded_by_user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_metered_amounts");
+
+                    b.HasIndex("ChargeTypeId")
+                        .HasDatabaseName("ix_metered_amounts_charge_type_id");
+
+                    b.HasIndex("UnitId")
+                        .HasDatabaseName("ix_metered_amounts_unit_id");
+
+                    b.HasIndex("EstateId", "Period", "ChargeTypeId", "UnitId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_metered_amounts_estate_id_period_charge_type_id_unit_id");
+
+                    b.ToTable("metered_amounts", (string)null);
                 });
 
             modelBuilder.Entity("EstateHub.Domain.Entities.MfaChallenge", b =>
@@ -1572,6 +2103,53 @@ namespace EstateHub.Infrastructure.Data.Migrations
                     b.ToTable("units", (string)null);
                 });
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.UnitCharge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("ChargeTypeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("charge_type_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("EstateId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("estate_id");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("unit_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_unit_charges");
+
+                    b.HasIndex("EstateId")
+                        .HasDatabaseName("ix_unit_charges_estate_id");
+
+                    b.HasIndex("UnitId")
+                        .HasDatabaseName("ix_unit_charges_unit_id");
+
+                    b.HasIndex("ChargeTypeId", "UnitId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_unit_charges_charge_type_id_unit_id");
+
+                    b.ToTable("unit_charges", (string)null);
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1747,6 +2325,47 @@ namespace EstateHub.Infrastructure.Data.Migrations
                     b.ToTable("user_passkeys", (string)null);
                 });
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.Account", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_accounts_estates_estate_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_accounts_units_unit_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.AccountHolder", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_account_holders_accounts_account_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_account_holders_estates_estate_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_account_holders_people_person_id");
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.AuthSession", b =>
                 {
                     b.HasOne("EstateHub.Domain.Entities.Estate", null)
@@ -1763,6 +2382,26 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasConstraintName("fk_auth_sessions_users_user_id");
                 });
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.BillingRun", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_billing_runs_estates_estate_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.BillingSettings", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_billing_settings_estates_estate_id");
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.Block", b =>
                 {
                     b.HasOne("EstateHub.Domain.Entities.Estate", null)
@@ -1771,6 +2410,16 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_blocks_estates_estate_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.ChargeType", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_charge_types_estates_estate_id");
                 });
 
             modelBuilder.Entity("EstateHub.Domain.Entities.Estate", b =>
@@ -1873,6 +2522,39 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .HasConstraintName("fk_known_devices_users_user_id");
                 });
 
+            modelBuilder.Entity("EstateHub.Domain.Entities.LedgerEntry", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ledger_entries_accounts_account_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.ChargeType", null)
+                        .WithMany()
+                        .HasForeignKey("ChargeTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_ledger_entries_charge_types_charge_type_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ledger_entries_estates_estate_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.LevyBudget", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_levy_budgets_estates_estate_id");
+                });
+
             modelBuilder.Entity("EstateHub.Domain.Entities.Membership", b =>
                 {
                     b.HasOne("EstateHub.Domain.Entities.Estate", null)
@@ -1888,6 +2570,30 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_memberships_users_user_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.MeteredAmount", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.ChargeType", null)
+                        .WithMany()
+                        .HasForeignKey("ChargeTypeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_metered_amounts_charge_types_charge_type_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_metered_amounts_estates_estate_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_metered_amounts_units_unit_id");
                 });
 
             modelBuilder.Entity("EstateHub.Domain.Entities.MfaChallenge", b =>
@@ -2036,6 +2742,30 @@ namespace EstateHub.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_units_estates_estate_id");
+                });
+
+            modelBuilder.Entity("EstateHub.Domain.Entities.UnitCharge", b =>
+                {
+                    b.HasOne("EstateHub.Domain.Entities.ChargeType", null)
+                        .WithMany()
+                        .HasForeignKey("ChargeTypeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_unit_charges_charge_types_charge_type_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Estate", null)
+                        .WithMany()
+                        .HasForeignKey("EstateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_unit_charges_estates_estate_id");
+
+                    b.HasOne("EstateHub.Domain.Entities.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_unit_charges_units_unit_id");
                 });
 
             modelBuilder.Entity("EstateHub.Domain.Entities.UserPasskey", b =>

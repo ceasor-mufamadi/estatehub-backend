@@ -8,7 +8,6 @@ using EstateHub.Application;
 using EstateHub.Application.Cron;
 using EstateHub.Infrastructure;
 using EstateHub.Infrastructure.Cron;
-using EstateHub.Infrastructure.Imports;
 using Grpc.AspNetCore.Web;
 using Microsoft.AspNetCore.Http.Timeouts;
 
@@ -78,8 +77,9 @@ else
         o.Interceptors.Add<OwnershipInterceptor>();
     })
     // Only the import upload carries a file: up to 8 MB, so a 5 MB spreadsheet always fits (decided 2026-10-28).
-    .AddServiceOptions<ImportGrpcService>(o => o.MaxReceiveMessageSize = 8 * 1024 * 1024);
-    builder.Services.AddHostedService<ImportWorker>();
+    .AddServiceOptions<ImportGrpcService>(o => o.MaxReceiveMessageSize = 8 * 1024 * 1024)
+    .AddServiceOptions<BillingRunsGrpcService>(o => o.MaxReceiveMessageSize = 8 * 1024 * 1024); // metered uploads
+    builder.Services.AddHostedService<EstateHub.Infrastructure.Background.EstateWorkWorker>();
     builder.Services.AddGrpcReflection();
 
     // Browsers call EstateHub with gRPC-Web on the HTTP/1.1 "Http" endpoint; native gRPC clients use the
@@ -130,6 +130,9 @@ if (runMode != "jobs")
     app.MapGrpcService<GuardDeviceGrpcService>();
     app.MapGrpcService<PeopleGrpcService>();
     app.MapGrpcService<ImportGrpcService>();
+    app.MapGrpcService<BillingGrpcService>();
+    app.MapGrpcService<AccountsGrpcService>();
+    app.MapGrpcService<BillingRunsGrpcService>();
 
     if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Docker")
     {

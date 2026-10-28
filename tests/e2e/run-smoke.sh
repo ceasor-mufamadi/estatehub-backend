@@ -41,6 +41,16 @@ status=0
 python3 -I tests/e2e/smoke.py || status=$?
 [ "$status" = "0" ] || echo "FAIL smoke.py exited with $status"
 
+# The ledger is append-only for the app's database role: corrections are reversals, never edits (slice 4.1).
+denied=$("${compose[@]}" exec -T -e PGPASSWORD="$ESTATEHUB_APP_PASSWORD" postgres \
+  psql -h localhost -U estatehub_app -d estatehub_test -c "UPDATE ledger_entries SET debit = debit; DELETE FROM ledger_entries;" 2>&1 || true)
+if echo "$denied" | grep -q "permission denied for table ledger_entries"; then
+  echo "PASS the app's database role can't edit or delete ledger entries"
+else
+  echo "FAIL ledger_entries is editable by estatehub_app: $denied"
+  status=1
+fi
+
 # Logs must never contain codes, links or tokens (SECURITY.md layer 7).
 leaks=$(docker logs "$name" 2>&1 | grep -ciE 'is your EstateHub code|/invite#|estatehub_refresh=|eyJ[A-Za-z0-9_-]{20,}' || true)
 if [ "$leaks" != "0" ]; then

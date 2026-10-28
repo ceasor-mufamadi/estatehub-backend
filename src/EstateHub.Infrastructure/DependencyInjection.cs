@@ -1,4 +1,5 @@
 using EstateHub.Application.Auth;
+using EstateHub.Application.Background;
 using EstateHub.Application.Imports;
 using EstateHub.Application.Interfaces;
 using EstateHub.Application.Streaming;
@@ -6,6 +7,7 @@ using EstateHub.Application.Tenancy;
 using EstateHub.Infrastructure.Auth;
 using EstateHub.Infrastructure.Cron;
 using EstateHub.Infrastructure.Data;
+using EstateHub.Infrastructure.Background;
 using EstateHub.Infrastructure.Imports;
 using EstateHub.Infrastructure.Messaging;
 using EstateHub.Infrastructure.Repositories;
@@ -115,14 +117,18 @@ public static class DependencyInjection
         services.AddScoped<IBlockRepository, BlockRepository>();
         services.AddScoped<IUnitRepository, UnitRepository>();
         services.AddScoped<IPeopleRepository, PeopleRepository>();
+        services.AddScoped<IBillingRepository, BillingRepository>();
+        services.AddScoped<EstateHub.Application.Billing.IBillingRunRepository, BillingRunRepository>();
 
-        // Spreadsheet import (slice 3.3): the worker that runs commits is hosted by the API only (Program.cs).
+        // Spreadsheet import (slice 3.3).
         services.AddScoped<IImportRepository, ImportRepository>();
         services.AddSingleton<IImportFileReader, SpreadsheetReader>();
         services.AddSingleton<IImportTemplate, ImportTemplate>();
-        services.AddSingleton<ImportQueue>();
-        services.AddSingleton<IImportQueue>(sp => sp.GetRequiredService<ImportQueue>());
-        services.AddSingleton<IImportProgress, ImportProgress>();
+
+        // Queued estate work (imports, billing runs): the worker itself is hosted by the API only (Program.cs).
+        services.AddSingleton<WorkQueue>();
+        services.AddSingleton<IWorkQueue>(sp => sp.GetRequiredService<WorkQueue>());
+        services.AddSingleton<IWorkProgress, WorkProgress>();
 
         return services;
     }

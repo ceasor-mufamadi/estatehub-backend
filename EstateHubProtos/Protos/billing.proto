@@ -1,0 +1,295 @@
+syntax = "proto3";
+
+option csharp_namespace = "EstateHub.Api";
+package estatehub.billing.v1;
+
+import "google/protobuf/timestamp.proto";
+import "Protos/streaming.proto";
+
+// Billing setup (slice 4.1): the estate's rules, its bank details (printed on statements) and its charge
+// types. Money is a decimal string in rands, e.g. "1234.56"; never a float.
+
+message GetBillingSettingsRequest {}
+
+message BillingSettings {
+  // 1–12.
+  int32 financial_year_start_month = 1;
+  // 1–28.
+  int32 billing_day = 2;
+  int32 due_day = 3;
+  // combined (one "Levy" line) or split (admin and reserve fund).
+  string levy_display = 4;
+  bool interest_enabled = 5;
+  // Yearly percentage, e.g. "10.50".
+  string interest_rate_percent = 6;
+  string queries_email = 7;
+  string queries_phone = 8;
+  string bank_name = 9;
+  string bank_branch_code = 10;
+  string bank_account_name = 11;
+  string bank_account_number = 12;
+}
+
+message UpdateBillingSettingsRequest {
+  int32 financial_year_start_month = 1;
+  int32 billing_day = 2;
+  int32 due_day = 3;
+  string levy_display = 4;
+  bool interest_enabled = 5;
+  string interest_rate_percent = 6;
+  string queries_email = 7;
+  string queries_phone = 8;
+}
+
+message UpdateBankDetailsRequest {
+  string bank_name = 1;
+  string branch_code = 2;
+  string account_name = 3;
+  string account_number = 4;
+}
+
+message ChargeType {
+  string id = 1;
+  // As printed on statements.
+  string name = 2;
+  // quota (the levy), flat, per_unit, metered, one_off.
+  string method = 3;
+  // For flat: the monthly amount every unit pays.
+  string amount = 4;
+  bool is_levy = 5;
+  bool is_active = 6;
+  int32 sort_order = 7;
+}
+
+message ChargeTypeInput {
+  string name = 1;
+  string method = 2;
+  string amount = 3;
+  bool is_active = 4;
+  int32 sort_order = 5;
+}
+
+message ListChargeTypesRequest {}
+
+message ListChargeTypesResponse {
+  repeated ChargeType items = 1;
+}
+
+message CreateChargeTypeRequest {
+  ChargeTypeInput charge = 1;
+}
+
+message UpdateChargeTypeRequest {
+  string charge_type_id = 1;
+  ChargeTypeInput charge = 2;
+}
+
+message UnitChargeAmount {
+  string unit_id = 1;
+  int32 section_number = 2;
+  string door_number = 3;
+  string amount = 4;
+}
+
+message ListUnitChargesRequest {
+  string charge_type_id = 1;
+}
+
+message ListUnitChargesResponse {
+  repeated UnitChargeAmount items = 1;
+}
+
+message SetUnitChargesRequest {
+  string charge_type_id = 1;
+  // unit_id + amount ("0" removes the unit's amount).
+  repeated UnitChargeAmount amounts = 2;
+}
+
+service BillingService {
+  rpc GetBillingSettings(GetBillingSettingsRequest) returns (BillingSettings);
+  rpc UpdateBillingSettings(UpdateBillingSettingsRequest) returns (BillingSettings);
+  // Needs a recent MFA; every trustee is emailed.
+  rpc UpdateBankDetails(UpdateBankDetailsRequest) returns (BillingSettings);
+  rpc ListChargeTypes(ListChargeTypesRequest) returns (ListChargeTypesResponse);
+  rpc CreateChargeType(CreateChargeTypeRequest) returns (ChargeType);
+  rpc UpdateChargeType(UpdateChargeTypeRequest) returns (ChargeType);
+  rpc ListUnitCharges(ListUnitChargesRequest) returns (ListUnitChargesResponse);
+  rpc SetUnitCharges(SetUnitChargesRequest) returns (ListUnitChargesResponse);
+}
+
+// ---------- the monthly run (slice 4.2) ----------
+
+message LevyBudget {
+  string id = 1;
+  // First month it applies to, "2026-03".
+  string effective_from = 2;
+  string admin_fund_monthly = 3;
+  string reserve_fund_monthly = 4;
+  string note = 5;
+  // A posted month used it: it stays as history.
+  bool used = 6;
+}
+
+message ListBudgetsRequest {}
+
+message ListBudgetsResponse {
+  repeated LevyBudget items = 1;
+}
+
+message AddBudgetRequest {
+  string effective_from = 1;
+  string admin_fund_monthly = 2;
+  string reserve_fund_monthly = 3;
+  string note = 4;
+}
+
+message RemoveBudgetRequest {
+  string budget_id = 1;
+}
+
+message RemoveBudgetResponse {}
+
+message UploadMeteredRequest {
+  // "2026-11".
+  string period = 1;
+  string charge_type_id = 2;
+  string file_name = 3;
+  // .csv or .xlsx: Unit, Amount, optional Reference. At most 5 MB.
+  bytes content = 4;
+}
+
+message UploadMeteredResponse {
+  // False when the file had problems: nothing was saved.
+  bool saved = 1;
+  int32 rows = 2;
+  string total = 3;
+  repeated string problems = 4;
+}
+
+message ListMeteredRequest {
+  string period = 1;
+}
+
+message MeteredSummary {
+  string charge_type_id = 1;
+  string charge_name = 2;
+  int32 units = 3;
+  string total = 4;
+  string file_name = 5;
+  google.protobuf.Timestamp uploaded_at = 6;
+}
+
+message ListMeteredResponse {
+  repeated MeteredSummary items = 1;
+}
+
+message RunProgress {
+  int32 done = 1;
+  int32 total = 2;
+  string message = 3;
+}
+
+message BillingRun {
+  string id = 1;
+  string period = 2;
+  // draft, queued, posting, posted.
+  string status = 3;
+  string billing_date = 4;
+  string total_posted = 5;
+  int32 accounts_posted = 6;
+  string message = 7;
+  google.protobuf.Timestamp posted_at = 8;
+  RunProgress progress = 9;
+}
+
+message CreateDraftRequest {
+  string period = 1;
+}
+
+message ListRunsRequest {}
+
+message ListRunsResponse {
+  repeated BillingRun items = 1;
+}
+
+message GetRunRequest {
+  string run_id = 1;
+}
+
+message DiscardDraftRequest {
+  string run_id = 1;
+}
+
+message DiscardDraftResponse {}
+
+message PreviewRunRequest {
+  string run_id = 1;
+}
+
+message RunLine {
+  string charge = 1;
+  string type = 2;
+  string amount = 3;
+  string reference = 4;
+}
+
+message RunAccount {
+  string account_id = 1;
+  string number = 2;
+  int32 section_number = 3;
+  repeated string holders = 4;
+  repeated RunLine lines = 5;
+  string total = 6;
+  // Empty when there was no earlier posted month.
+  string previous_total = 7;
+  repeated string flags = 8;
+}
+
+message RunChargeTotal {
+  string charge = 1;
+  string total = 2;
+  int32 accounts = 3;
+}
+
+message RunPreview {
+  BillingRun run = 1;
+  repeated RunAccount accounts = 2;
+  repeated RunChargeTotal totals = 3;
+  string grand_total = 4;
+  // Stop posting (e.g. quotas not 100%).
+  repeated string blockers = 5;
+  // Don't stop posting (e.g. a unit without an owner isn't billed).
+  repeated string warnings = 6;
+}
+
+message PostRunRequest {
+  string run_id = 1;
+}
+
+message WatchRunRequest {
+  string run_id = 1;
+}
+
+message RunStreamEvent {
+  oneof event {
+    BillingRun run = 1;
+    estatehub.streaming.v1.StreamHeartbeat heartbeat = 2;
+  }
+}
+
+service BillingRunsService {
+  rpc ListBudgets(ListBudgetsRequest) returns (ListBudgetsResponse);
+  rpc AddBudget(AddBudgetRequest) returns (LevyBudget);
+  rpc RemoveBudget(RemoveBudgetRequest) returns (RemoveBudgetResponse);
+  rpc UploadMetered(UploadMeteredRequest) returns (UploadMeteredResponse);
+  rpc ListMetered(ListMeteredRequest) returns (ListMeteredResponse);
+  rpc CreateDraft(CreateDraftRequest) returns (BillingRun);
+  rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+  rpc GetRun(GetRunRequest) returns (BillingRun);
+  rpc DiscardDraft(DiscardDraftRequest) returns (DiscardDraftResponse);
+  rpc PreviewRun(PreviewRunRequest) returns (RunPreview);
+  // Needs a recent MFA. Queued; repeat clicks return the same run.
+  rpc PostRun(PostRunRequest) returns (BillingRun);
+  // Progress while queued or posting; ends when posted (or back to draft).
+  rpc WatchRun(WatchRunRequest) returns (stream RunStreamEvent);
+}
